@@ -234,6 +234,32 @@ def process_event(session: Session, envelope: AdpEventEnvelopeSchema) -> Dict[st
                 "event_id": envelope.event_id,
             }
 
+        if envelope.event_type == "queue.updated":
+            from autodine_core.modules.queue.service import apply_queue_update
+
+            session.add(_build_inbox_record(envelope, status=EventInboxStatus.PROCESSED))
+            apply_queue_update(
+                session,
+                store_id=envelope.store_id,
+                trace_id=envelope.trace_id or envelope.event_id,
+                payload=envelope.payload,
+            )
+            session.commit()
+            return {"status": "processed", "event_id": envelope.event_id}
+
+        if envelope.event_type == "device.command_result":
+            from autodine_core.modules.device.service import apply_command_result
+
+            session.add(_build_inbox_record(envelope, status=EventInboxStatus.PROCESSED))
+            apply_command_result(
+                session,
+                store_id=envelope.store_id,
+                trace_id=envelope.trace_id or envelope.event_id,
+                payload=envelope.payload,
+            )
+            session.commit()
+            return {"status": "processed", "event_id": envelope.event_id}
+
         session.add(_build_inbox_record(envelope, status=EventInboxStatus.IGNORED))
         session.commit()
         return {

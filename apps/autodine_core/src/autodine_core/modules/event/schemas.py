@@ -41,6 +41,22 @@ class QualityAbnormalPayloadSchema(BaseModel):
         return self
 
 
+class QueueUpdatedPayloadSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    zone_id: str = Field(min_length=1)
+    waiting_count: int = Field(ge=0)
+    estimated_wait_seconds: Optional[int] = Field(default=None, ge=0)
+
+
+class DeviceCommandResultPayloadSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    command_id: str = Field(min_length=1)
+    status: str = Field(pattern=r"^(SUCCEEDED|FAILED|TIMED_OUT)$")
+    result: Dict[str, Any] = Field(default_factory=dict)
+
+
 class AdpEventEnvelopeSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -79,4 +95,8 @@ class AdpEventEnvelopeSchema(BaseModel):
             return InventoryDetectedPayloadSchema.model_validate(value).model_dump()
         if event_type == "quality.abnormal":
             return QualityAbnormalPayloadSchema.model_validate(value).model_dump(exclude_none=True)
+        if event_type == "queue.updated":
+            return QueueUpdatedPayloadSchema.model_validate(value).model_dump(exclude_none=True)
+        if event_type == "device.command_result":
+            return DeviceCommandResultPayloadSchema.model_validate(value).model_dump()
         return value

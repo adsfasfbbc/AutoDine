@@ -7,12 +7,17 @@ from fastapi import FastAPI
 
 from autodine_core.config import Settings, build_settings
 from autodine_core.infrastructure.database import Base, build_engine, build_session_factory
-from autodine_core.infrastructure.event_bus import NullEventPublisher
+from autodine_core.infrastructure.event_bus import InMemoryEventPublisher, WebSocketConnectionManager
+from autodine_core.infrastructure.event_bus.routes import router as websocket_router
+from autodine_core.modules.alarm.routes import router as alarm_router
+from autodine_core.modules.analytics.routes import router as analytics_router
+from autodine_core.modules.device.routes import router as device_router
 from autodine_core.modules.event.routes import router as event_router
 from autodine_core.modules.inventory.routes import router as inventory_router
 from autodine_core.modules.menu.routes import router as menu_router
 from autodine_core.modules.order.routes import router as order_router
 from autodine_core.modules.production.routes import router as production_router
+from autodine_core.modules.queue.routes import router as queue_router
 
 
 def _utc_timestamp() -> str:
@@ -29,7 +34,8 @@ def create_app(database_url: str | None = None) -> FastAPI:
     app.state.engine = engine
     app.state.session_factory = session_factory
     app.state.metadata = Base.metadata
-    app.state.event_publisher = NullEventPublisher()
+    app.state.websocket_manager = WebSocketConnectionManager()
+    app.state.event_publisher = InMemoryEventPublisher(app.state.websocket_manager)
 
     @app.get("/health")
     def healthcheck() -> Dict[str, str]:
@@ -44,5 +50,10 @@ def create_app(database_url: str | None = None) -> FastAPI:
     app.include_router(event_router)
     app.include_router(order_router)
     app.include_router(production_router)
+    app.include_router(queue_router)
+    app.include_router(device_router)
+    app.include_router(alarm_router)
+    app.include_router(analytics_router)
+    app.include_router(websocket_router)
 
     return app
