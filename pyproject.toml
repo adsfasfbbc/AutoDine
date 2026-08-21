@@ -7,9 +7,24 @@ name = "autodine"
 version = "0.1.0"
 description = "AutoDine v1 monorepo skeleton and shared interface contracts."
 requires-python = ">=3.8"
+dependencies = [
+    "fastapi>=0.115,<0.116",
+    "pydantic-settings>=2.5,<3",
+    "sqlalchemy>=2.0,<2.1",
+]
 
 [project.optional-dependencies]
-test = ["jsonschema>=4,<5"]
+test = [
+    "httpx>=0.28,<0.29",
+    "jsonschema>=4,<5",
+    "pytest>=8,<9",
+]
+
+[tool.setuptools]
+package-dir = {"" = "apps/autodine_core/src"}
+
+[tool.setuptools.packages.find]
+where = ["apps/autodine_core/src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
