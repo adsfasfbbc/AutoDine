@@ -1,0 +1,14 @@
+version: v1
+description: Placeholder topic registry for websocket fan-out.
+topics:
+  - vision.storage.sample
+  - vision.front.sample
+  - inventory.sample
+  - quality.sample
+  - menu.sample
+  - order.sample
+  - production.sample
+  - device.sample
+  - robot.sample
+  - alarm.sample
+  - queue.sample

@@ -1,0 +1,41 @@
+asyncapi: 3.0.0
+info:
+  title: AutoDine Event Stream v1
+  version: 0.0.0-placeholder
+  description: >
+    Placeholder AsyncAPI contract that records the reserved event namespaces
+    for v1 without freezing channel payloads yet.
+channels:
+  vision.storage.sample:
+    address: vision.storage.sample
+    messages: {}
+  vision.front.sample:
+    address: vision.front.sample
+    messages: {}
+  inventory.sample:
+    address: inventory.sample
+    messages: {}
+  quality.sample:
+    address: quality.sample
+    messages: {}
+  menu.sample:
+    address: menu.sample
+    messages: {}
+  order.sample:
+    address: order.sample
+    messages: {}
+  production.sample:
+    address: production.sample
+    messages: {}
+  device.sample:
+    address: device.sample
+    messages: {}
+  robot.sample:
+    address: robot.sample
+    messages: {}
+  alarm.sample:
+    address: alarm.sample
+    messages: {}
+  queue.sample:
+    address: queue.sample
+    messages: {}

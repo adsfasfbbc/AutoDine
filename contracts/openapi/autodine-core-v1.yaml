@@ -1,0 +1,11 @@
+openapi: 3.1.0
+info:
+  title: AutoDine Core API v1
+  version: 0.0.0-placeholder
+  summary: Placeholder contract for the AutoDine Core v1 HTTP API.
+  description: >
+    This document intentionally reserves the v1 contract location without
+    inventing business endpoints before the API surface is frozen.
+servers: []
+paths: {}
+components: {}

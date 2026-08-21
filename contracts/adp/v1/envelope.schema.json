@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://autodine.local/contracts/adp/v1/envelope.schema.json",
+  "title": "AutoDine ADP v1 Envelope",
+  "description": "Shared event envelope for AutoDine v1 modules. Event type namespaces include vision.storage.*, vision.front.*, inventory.*, quality.*, menu.*, order.*, production.*, device.*, robot.*, alarm.*, and queue.*.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "version",
+    "event_id",
+    "trace_id",
+    "timestamp",
+    "store_id",
+    "source",
+    "event_type",
+    "severity",
+    "payload"
+  ],
+  "properties": {
+    "protocol": {
+      "type": "string",
+      "const": "adp"
+    },
+    "version": {
+      "type": "string",
+      "const": "v1"
+    },
+    "event_id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9_-]*$"
+    },
+    "trace_id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9_-]*$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "store_id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9_-]*$"
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9_.-]*$"
+    },
+    "event_type": {
+      "type": "string",
+      "description": "snake_case event names under frozen v1 namespaces: vision.storage.*, vision.front.*, inventory.*, quality.*, menu.*, order.*, production.*, device.*, robot.*, alarm.*, queue.*",
+      "pattern": "^(vision\\.storage|vision\\.front|inventory|quality|menu|order|production|device|robot|alarm|queue)\\.[a-z0-9]+(?:_[a-z0-9]+)*(?:\\.[a-z0-9]+(?:_[a-z0-9]+)*)*$"
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "debug",
+        "info",
+        "warning",
+        "error",
+        "critical"
+      ]
+    },
+    "payload": {
+      "type": "object",
+      "description": "Event-specific body with snake_case keys defined by downstream topic contracts.",
+      "additionalProperties": true
+    }
+  }
+}
