@@ -2,9 +2,11 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.mypy_cache/
 .venv/
 venv/
 *.egg-info/
+*.db
 
 # Environment
 .env
@@ -14,3 +16,6 @@ venv/
 Thumbs.db
 .idea/
 .vscode/
+
+# Agent scratch reports; durable design/plan files live under docs/superpowers.
+.superpowers/
