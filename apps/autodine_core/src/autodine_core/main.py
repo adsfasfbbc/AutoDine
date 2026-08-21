@@ -7,6 +7,8 @@ from fastapi import FastAPI
 
 from autodine_core.config import Settings, build_settings
 from autodine_core.infrastructure.database import Base, build_engine, build_session_factory
+from autodine_core.modules.inventory.routes import router as inventory_router
+from autodine_core.modules.menu.routes import router as menu_router
 
 
 def _utc_timestamp() -> str:
@@ -31,5 +33,8 @@ def create_app(database_url: str | None = None) -> FastAPI:
             "service": settings.service_name,
             "timestamp": _utc_timestamp(),
         }
+
+    app.include_router(inventory_router)
+    app.include_router(menu_router)
 
     return app
