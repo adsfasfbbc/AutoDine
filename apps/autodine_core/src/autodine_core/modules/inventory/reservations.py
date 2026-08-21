@@ -6,7 +6,7 @@ from enum import Enum
 from typing import Optional
 from uuid import uuid4
 
-from sqlalchemy import DateTime, Enum as SqlEnum, ForeignKey, Numeric, String
+from sqlalchemy import DateTime, Enum as SqlEnum, ForeignKey, ForeignKeyConstraint, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from autodine_core.infrastructure.database import Base
@@ -31,6 +31,13 @@ class ReservationStatus(str, Enum):
 
 class InventoryReservation(Base):
     __tablename__ = "inventory_reservations"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["store_id", "ingredient_id", "location_id"],
+            ["inventories.store_id", "inventories.ingredient_id", "inventories.location_id"],
+            name="fk_reservations_inventory_bucket",
+        ),
+    )
 
     reservation_id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: uuid4().hex)
     order_id: Mapped[str] = mapped_column(ForeignKey("orders.order_id"), nullable=False, index=True)
@@ -48,6 +55,13 @@ class InventoryReservation(Base):
 
 class InventoryMovement(Base):
     __tablename__ = "inventory_movements"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["store_id", "ingredient_id", "location_id"],
+            ["inventories.store_id", "inventories.ingredient_id", "inventories.location_id"],
+            name="fk_movements_inventory_bucket",
+        ),
+    )
 
     movement_id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: uuid4().hex)
     order_id: Mapped[Optional[str]] = mapped_column(ForeignKey("orders.order_id"), nullable=True, index=True)

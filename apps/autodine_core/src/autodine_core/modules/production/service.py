@@ -45,9 +45,18 @@ def _get_task(session: Session, task_id: str) -> ProductionTask:
     return task
 
 
+def _get_task_for_update(session: Session, task_id: str) -> ProductionTask:
+    task = session.scalar(
+        select(ProductionTask).where(ProductionTask.task_id == task_id).with_for_update()
+    )
+    if task is None:
+        raise OrderProcessingError(code="TASK_NOT_FOUND", message="production task not found", http_status=404)
+    return task
+
+
 def start_task(session: Session, task_id: str) -> Dict[str, Any]:
     try:
-        task = _get_task(session, task_id)
+        task = _get_task_for_update(session, task_id)
         if task.status is ProductionTaskStatus.PRODUCING:
             return _task_data(session, task)
         if task.status is not ProductionTaskStatus.PENDING:
@@ -73,7 +82,7 @@ def start_task(session: Session, task_id: str) -> Dict[str, Any]:
 
 def ready_task(session: Session, task_id: str) -> Dict[str, Any]:
     try:
-        task = _get_task(session, task_id)
+        task = _get_task_for_update(session, task_id)
         if task.status is ProductionTaskStatus.READY:
             return _task_data(session, task)
         if task.status is not ProductionTaskStatus.PRODUCING:
@@ -103,12 +112,14 @@ def complete_task(
     actual_consumption: Iterable[Mapping[str, Any]],
 ) -> Dict[str, Any]:
     try:
-        task = _get_task(session, task_id)
+        # Lock the task, order, and active reservations before reading state so
+        # two completion calls cannot both consume the same reservation set.
+        task = _get_task_for_update(session, task_id)
         if task.status is ProductionTaskStatus.COMPLETED:
             return _task_data(session, task)
         if task.status is not ProductionTaskStatus.READY:
             raise OrderProcessingError(code="INVALID_TASK_TRANSITION", message="task is not ready")
-        order = session.get(Order, task.order_id)
+        order = session.scalar(select(Order).where(Order.order_id == task.order_id).with_for_update())
         if order is None or order.status is not OrderStatus.READY:
             raise OrderProcessingError(code="INVALID_ORDER_TRANSITION", message="order is not ready")
 
@@ -130,7 +141,14 @@ def complete_task(
                 InventoryReservation.order_id == order.order_id,
                 InventoryReservation.status == ReservationStatus.ACTIVE,
             )
+            .with_for_update()
         ).all()
+        reservation_keys = {(reservation.ingredient_id, reservation.location_id) for reservation in reservations}
+        if set(consumption) != reservation_keys:
+            raise OrderProcessingError(
+                code="INVALID_CONSUMPTION",
+                message="actual consumption must cover every tracked reservation exactly once",
+            )
         affected_ingredients = set()
         release_records = []
         movement_base = datetime.now(timezone.utc)

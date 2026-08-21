@@ -384,3 +384,33 @@ def test_production_task_transitions_complete_order_and_record_actual_consumptio
         "menu.availability_changed",
     ]
     session.close()
+
+
+def test_production_completion_rejects_missing_actual_consumption_without_releasing_stock() -> None:
+    client = _build_client()
+    session = client.app.state.session_factory()
+    _seed_menu_catalog(session)
+    session.close()
+
+    create = client.post(
+        "/api/v1/orders",
+        json={
+            "store_id": "store-1",
+            "customer_id": "cust-7",
+            "idempotency_key": "idem-invalid-complete",
+            "items": [{"product_id": "latte", "quantity": 1}],
+        },
+    )
+    task_id = create.json()["data"]["task"]["task_id"]
+    client.post("/api/v1/production/tasks/" + task_id + "/start")
+    client.post("/api/v1/production/tasks/" + task_id + "/ready")
+
+    response = client.post("/api/v1/production/tasks/" + task_id + "/complete", json={})
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "INVALID_CONSUMPTION"
+    session = client.app.state.session_factory()
+    bean_inventory = session.get(Inventory, ("store-1", "bean", "bar"))
+    assert bean_inventory.physical_quantity == Decimal("600")
+    assert bean_inventory.reserved_quantity == Decimal("120")
+    session.close()

@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from autodine_core.modules.event.models import EventOutbox, PublishStatus
@@ -348,6 +349,20 @@ def create_order(session: Session, request: OrderCreate) -> Dict[str, Any]:
     except OrderProcessingError:
         session.rollback()
         raise
+    except IntegrityError:
+        # The unique (store_id, idempotency_key) constraint is the final arbiter
+        # when two requests race before either can see the other's order.
+        session.rollback()
+        raced = session.scalar(
+            select(Order)
+            .where(Order.store_id == request.store_id, Order.idempotency_key == request.idempotency_key)
+            .options(selectinload(Order.items))
+        )
+        if raced is not None:
+            if _canonical_order(raced) != _canonical_request(request):
+                raise OrderProcessingError(code="IDEMPOTENCY_CONFLICT", message="idempotency key payload conflict")
+            return _order_data(session, raced.order_id, idempotency_status="replayed")
+        raise
     except Exception:
         session.rollback()
         raise
@@ -380,6 +395,8 @@ def cancel_order(session: Session, order_id: str) -> Dict[str, Any]:
                 inventory.reserved_quantity = max(
                     Decimal("0"), inventory.reserved_quantity - reservation.quantity
                 )
+            else:
+                raise OrderProcessingError(code="INVENTORY_NOT_FOUND", message="reserved inventory not found")
             reservation.status = ReservationStatus.RELEASED
             session.add(
                 InventoryMovement(
