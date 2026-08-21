@@ -1,0 +1,12 @@
+{
+  "protocol": "ADP",
+  "version": "1.0",
+  "event_id": "mock-device-telemetry-001",
+  "trace_id": "mock-device-telemetry-001",
+  "event_type": "device.telemetry",
+  "severity": "info",
+  "timestamp": "2026-08-21T10:15:00Z",
+  "store_id": "store-main",
+  "source": {"module": "hardware_hub", "device_id": "coffee-machine-01"},
+  "payload": {"temperature_c": 92.5, "water_level_percent": 88, "online": true}
+}

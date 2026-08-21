@@ -1,0 +1,12 @@
+{
+  "protocol": "ADP",
+  "version": "1.0",
+  "event_id": "mock-storage-detection-001",
+  "trace_id": "mock-storage-detection-001",
+  "event_type": "vision.storage.detected",
+  "severity": "info",
+  "timestamp": "2026-08-21T10:00:00Z",
+  "store_id": "store-main",
+  "source": {"module": "smart_storage_vision", "device_id": "storage-cam-01"},
+  "payload": {"detections": [{"ingredient_id": "milk", "confidence": 0.98}], "location_id": "bar"}
+}

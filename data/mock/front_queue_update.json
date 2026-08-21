@@ -1,0 +1,12 @@
+{
+  "protocol": "ADP",
+  "version": "1.0",
+  "event_id": "mock-front-queue-001",
+  "trace_id": "mock-front-queue-001",
+  "event_type": "queue.updated",
+  "severity": "info",
+  "timestamp": "2026-08-21T10:10:00Z",
+  "store_id": "store-main",
+  "source": {"module": "front_vision", "device_id": "front-cam-01"},
+  "payload": {"zone_id": "front-counter", "waiting_count": 4, "estimated_wait_seconds": 180}
+}

@@ -1,4 +1,10 @@
-# autodine_core migrations
+# AutoDine Core migrations
 
-Alembic migrations for `autodine_core` will live here. Task 2 only establishes
-the bootstrap location and shared SQLAlchemy metadata foundation.
+PostgreSQL schema creation is owned by Alembic, not application startup. From the repository root run:
+
+```sh
+alembic -c apps/autodine_core/alembic.ini upgrade head
+python scripts/seed_data.py --database-url "$AUTODINE_CORE_DATABASE_URL"
+```
+
+`Base.metadata.create_all` remains only in isolated SQLite test/bootstrap paths. The Compose Core service applies `upgrade head` before loading the deterministic seed catalog.

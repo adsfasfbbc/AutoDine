@@ -1,0 +1,12 @@
+{
+  "protocol": "ADP",
+  "version": "1.0",
+  "event_id": "mock-quality-abnormal-001",
+  "trace_id": "mock-quality-abnormal-001",
+  "event_type": "quality.abnormal",
+  "severity": "warning",
+  "timestamp": "2026-08-21T10:05:00Z",
+  "store_id": "store-main",
+  "source": {"module": "smart_storage_vision", "device_id": "storage-cam-01"},
+  "payload": {"ingredient_id": "milk", "location_id": "bar", "defective_quantity": "500"}
+}

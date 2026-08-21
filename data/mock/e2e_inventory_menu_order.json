@@ -1,0 +1,26 @@
+{
+  "sold_out": {
+    "protocol": "ADP",
+    "version": "1.0",
+    "event_id": "mock-e2e-latte-sold-out-001",
+    "trace_id": "mock-e2e-latte-flow-001",
+    "event_type": "inventory.detected",
+    "severity": "info",
+    "timestamp": "2026-08-21T10:20:00Z",
+    "store_id": "store-main",
+    "source": {"module": "smart_storage_vision", "device_id": "storage-cam-01"},
+    "payload": {"ingredient_id": "coffee_bean", "location_id": "bar", "physical_quantity": "0", "unit": "g"}
+  },
+  "recovered": {
+    "protocol": "ADP",
+    "version": "1.0",
+    "event_id": "mock-e2e-latte-recovered-001",
+    "trace_id": "mock-e2e-latte-flow-001",
+    "event_type": "inventory.detected",
+    "severity": "info",
+    "timestamp": "2026-08-21T10:21:00Z",
+    "store_id": "store-main",
+    "source": {"module": "smart_storage_vision", "device_id": "storage-cam-01"},
+    "payload": {"ingredient_id": "coffee_bean", "location_id": "bar", "physical_quantity": "5000", "unit": "g"}
+  }
+}

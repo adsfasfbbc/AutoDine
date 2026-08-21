@@ -1,0 +1,26 @@
+[
+  {
+    "protocol": "ADP",
+    "version": "1.0",
+    "event_id": "mock-order-created-001",
+    "trace_id": "mock-order-production-001",
+    "event_type": "order.created",
+    "severity": "info",
+    "timestamp": "2026-08-21T10:25:00Z",
+    "store_id": "store-main",
+    "source": {"module": "core"},
+    "payload": {"order_id": "documented-api-order", "product_id": "latte", "quantity": 1}
+  },
+  {
+    "protocol": "ADP",
+    "version": "1.0",
+    "event_id": "mock-production-task-001",
+    "trace_id": "mock-order-production-001",
+    "event_type": "production.task_created",
+    "severity": "info",
+    "timestamp": "2026-08-21T10:25:01Z",
+    "store_id": "store-main",
+    "source": {"module": "core"},
+    "payload": {"task_id": "documented-api-task", "order_id": "documented-api-order"}
+  }
+]
