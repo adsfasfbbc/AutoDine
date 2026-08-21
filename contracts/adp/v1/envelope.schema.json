@@ -20,11 +20,11 @@
   "properties": {
     "protocol": {
       "type": "string",
-      "const": "adp"
+      "const": "ADP"
     },
     "version": {
       "type": "string",
-      "const": "v1"
+      "const": "1.0"
     },
     "event_id": {
       "type": "string",
@@ -46,9 +46,24 @@
       "pattern": "^[a-z0-9][a-z0-9_-]*$"
     },
     "source": {
-      "type": "string",
-      "minLength": 1,
-      "pattern": "^[a-z0-9][a-z0-9_.-]*$"
+      "type": "object",
+      "description": "Structured producer identity. module is required; device_id is optional for service-originated events.",
+      "additionalProperties": false,
+      "required": [
+        "module"
+      ],
+      "properties": {
+        "module": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9_.-]*$"
+        },
+        "device_id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9_.-]*$"
+        }
+      }
     },
     "event_type": {
       "type": "string",

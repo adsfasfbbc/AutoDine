@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -107,12 +109,59 @@ def test_adp_envelope_schema_defines_the_v1_contract():
 
     properties = schema.get("properties", {})
     assert set(properties) == set(ENVELOPE_REQUIRED_FIELDS)
+    assert properties["protocol"].get("const") == "ADP"
+    assert properties["version"].get("const") == "1.0"
     assert properties["payload"].get("type") == "object"
     assert properties["event_type"].get("pattern")
+    assert properties["source"].get("type") == "object"
+    assert properties["source"].get("additionalProperties") is False
+    assert properties["source"].get("required") == ["module"]
+    assert properties["source"].get("properties", {}).get("module", {}).get("type") == "string"
+    assert properties["source"].get("properties", {}).get("device_id", {}).get("type") == "string"
 
     event_type_description = json.dumps(properties["event_type"], ensure_ascii=False)
     for namespace in EVENT_NAMESPACES:
         assert namespace in event_type_description
+
+
+def test_adp_envelope_schema_validates_structured_source_with_jsonschema():
+    try:
+        from jsonschema import Draft202012Validator
+    except ModuleNotFoundError:
+        pytest.fail("jsonschema must be installed for schema validation tests")
+
+    schema_path = repo_path("contracts/adp/v1/envelope.schema.json")
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    validator = Draft202012Validator(schema)
+
+    valid_event = {
+        "protocol": "ADP",
+        "version": "1.0",
+        "event_id": "evt_001",
+        "trace_id": "trace_001",
+        "timestamp": "2026-08-21T00:00:00Z",
+        "store_id": "store_001",
+        "source": {
+            "module": "vision.storage.camera_ingest",
+            "device_id": "cam_001",
+        },
+        "event_type": "vision.storage.item_detected",
+        "severity": "info",
+        "payload": {
+            "sku_id": "sku_001",
+        },
+    }
+    validator.validate(valid_event)
+
+    invalid_event = {
+        **valid_event,
+        "source": {
+            "device_id": "cam_001",
+        },
+    }
+
+    with pytest.raises(Exception):
+        validator.validate(invalid_event)
 
 
 def test_contract_placeholders_are_present_and_readable():
