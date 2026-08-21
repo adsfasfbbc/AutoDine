@@ -10,6 +10,7 @@ requires-python = ">=3.8"
 dependencies = [
     "fastapi>=0.115,<0.116",
     "pydantic-settings>=2.5,<3",
+    "psycopg>=3.2,<3.3",
     "sqlalchemy>=2.0,<2.1",
 ]
 
@@ -27,4 +28,4 @@ package-dir = {"" = "apps/autodine_core/src"}
 where = ["apps/autodine_core/src"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "apps/autodine_core/tests"]

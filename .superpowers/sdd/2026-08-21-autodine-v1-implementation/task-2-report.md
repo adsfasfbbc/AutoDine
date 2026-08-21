@@ -126,3 +126,92 @@ Planned commit message:
 ```text
 feat(core): add application bootstrap and persistence base
 ```
+
+## Fix Round
+
+Review findings addressed:
+
+- Changed runtime default database URL from SQLite to PostgreSQL while preserving explicit SQLite injection for tests via `create_app(database_url=...)`
+- Changed Alembic default URL from SQLite to PostgreSQL
+- Added `psycopg` runtime dependency
+- Expanded default pytest discovery to include `apps/autodine_core/tests`
+- Added `*.egg-info/` to `.gitignore`
+- Removed the generated `apps/autodine_core/src/autodine.egg-info/` artifact from the working tree and kept it uncommitted
+
+### Fix RED
+
+Command:
+
+```powershell
+pytest apps/autodine_core/tests/test_db_models.py::test_runtime_and_alembic_default_to_postgresql_urls -q
+```
+
+Observed output before the fix:
+
+```text
+F                                                                        [100%]
+================================== FAILURES ===================================
+_____________ test_runtime_and_alembic_default_to_postgresql_urls _____________
+E       AssertionError: assert False
+E        +  where False = 'sqlite+pysqlite:///./autodine_core.db'.startswith('postgresql+psycopg://')
+1 failed in 0.45s
+```
+
+### Fix GREEN
+
+Focused Task 2 suite:
+
+```powershell
+pytest apps/autodine_core/tests -q
+```
+
+Observed output:
+
+```text
+...                                                                      [100%]
+3 passed in 0.51s
+```
+
+Full repository suite:
+
+```powershell
+pytest -q
+```
+
+Observed output:
+
+```text
+.........                                                                [100%]
+9 passed in 0.54s
+```
+
+Generated artifact cleanup verification:
+
+```powershell
+git clean -fdX -- 'apps/autodine_core/src/autodine.egg-info'
+```
+
+Observed output:
+
+```text
+Removing apps/autodine_core/src/autodine.egg-info/
+```
+
+Whitespace check:
+
+```powershell
+git diff --check
+```
+
+Observed output:
+
+```text
+warning: in the working copy of '.gitignore', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '.superpowers/sdd/2026-08-21-autodine-v1-implementation/task-2-report.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/autodine_core/alembic.ini', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/autodine_core/src/autodine_core/config.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/autodine_core/tests/test_db_models.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'pyproject.toml', LF will be replaced by CRLF the next time Git touches it
+```
+
+These are line-ending warnings only; `git diff --check` did not report whitespace errors or fail.

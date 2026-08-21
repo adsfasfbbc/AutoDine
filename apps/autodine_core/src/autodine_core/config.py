@@ -8,7 +8,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     service_name: str = "autodine_core"
-    database_url: str = Field(default="sqlite+pysqlite:///./autodine_core.db")
+    database_url: str = Field(
+        default="postgresql+psycopg://autodine:autodine@localhost:5432/autodine_core"
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="AUTODINE_CORE_",
