@@ -164,13 +164,13 @@ def test_adp_envelope_schema_validates_structured_source_with_jsonschema():
         validator.validate(invalid_event)
 
 
-def test_contract_placeholders_are_present_and_readable():
+def test_contracts_are_present_and_readable():
     openapi_path = repo_path("contracts/openapi/autodine-core-v1.yaml")
     asyncapi_path = repo_path("contracts/asyncapi/autodine-events-v1.yaml")
     websocket_path = repo_path("contracts/websocket/topics.yaml")
 
     for contract_path in [openapi_path, asyncapi_path, websocket_path]:
-        assert contract_path.is_file(), f"missing contract placeholder: {contract_path}"
+        assert contract_path.is_file(), f"missing contract: {contract_path}"
 
     openapi_text = openapi_path.read_text(encoding="utf-8")
     asyncapi_text = asyncapi_path.read_text(encoding="utf-8")
@@ -178,12 +178,16 @@ def test_contract_placeholders_are_present_and_readable():
 
     assert "openapi:" in openapi_text
     assert "AutoDine Core API v1" in openapi_text
-    assert "placeholder" in openapi_text.lower()
-    assert "paths: {}" in openapi_text
+    assert "version: 1.0.0" in openapi_text
+    assert "/api/v1/events" in openapi_text
+    assert "/api/v1/orders" in openapi_text
 
     assert "asyncapi:" in asyncapi_text
     assert "AutoDine Event Stream v1" in asyncapi_text
-    assert "placeholder" in asyncapi_text.lower()
+    assert "version: 1.0.0" in asyncapi_text
+    assert "queue.updated" in asyncapi_text
+
+    assert "endpoint: /ws/stores/{store_id}" in websocket_text
 
     for namespace in EVENT_NAMESPACES:
         assert namespace in asyncapi_text

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Dict
+from typing import Any, Dict
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 from autodine_core.config import Settings, build_settings
 from autodine_core.infrastructure.database import Base, build_engine, build_session_factory
@@ -18,6 +21,7 @@ from autodine_core.modules.menu.routes import router as menu_router
 from autodine_core.modules.order.routes import router as order_router
 from autodine_core.modules.production.routes import router as production_router
 from autodine_core.modules.queue.routes import router as queue_router
+from autodine_core.modules import response_envelope
 
 
 def _utc_timestamp() -> str:
@@ -37,13 +41,42 @@ def create_app(database_url: str | None = None) -> FastAPI:
     app.state.websocket_manager = WebSocketConnectionManager()
     app.state.event_publisher = InMemoryEventPublisher(app.state.websocket_manager)
 
+    @app.exception_handler(RequestValidationError)
+    async def request_validation_handler(request, exc: RequestValidationError):
+        return JSONResponse(
+            status_code=422,
+            content=jsonable_encoder(
+                response_envelope(
+                    {"errors": exc.errors()},
+                    code="VALIDATION_ERROR",
+                    message="request validation failed",
+                )
+            ),
+        )
+
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(request, exc: HTTPException):
+        detail = exc.detail
+        if isinstance(detail, dict) and "code" in detail:
+            code = detail["code"]
+            message = detail.get("message", "request failed")
+        else:
+            code = "HTTP_" + str(exc.status_code)
+            message = str(detail)
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=jsonable_encoder(response_envelope({}, code=code, message=message)),
+        )
+
     @app.get("/health")
-    def healthcheck() -> Dict[str, str]:
-        return {
-            "status": "ok",
-            "service": settings.service_name,
-            "timestamp": _utc_timestamp(),
-        }
+    def healthcheck() -> Dict[str, Any]:
+        return response_envelope(
+            {
+                "status": "ok",
+                "service": settings.service_name,
+                "timestamp": _utc_timestamp(),
+            }
+        )
 
     app.include_router(inventory_router)
     app.include_router(menu_router)

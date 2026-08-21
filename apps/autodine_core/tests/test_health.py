@@ -19,8 +19,9 @@ def test_health_endpoint_returns_core_status_payload() -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["status"] == "ok"
-    assert payload["service"] == "autodine_core"
+    assert payload["code"] == 0
+    assert payload["data"]["status"] == "ok"
+    assert payload["data"]["service"] == "autodine_core"
 
-    timestamp = datetime.fromisoformat(payload["timestamp"].replace("Z", "+00:00"))
+    timestamp = datetime.fromisoformat(payload["data"]["timestamp"].replace("Z", "+00:00"))
     assert timestamp.tzinfo == timezone.utc

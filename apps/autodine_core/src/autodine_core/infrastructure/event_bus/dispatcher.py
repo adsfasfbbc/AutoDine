@@ -36,3 +36,11 @@ def dispatch_pending(session: Session, publisher: EventPublisher) -> int:
             row.publish_status = PublishStatus.FAILED
     session.commit()
     return delivered
+
+
+def dispatch_app_outbox(session: Session, app: Any) -> int:
+    """Publish committed outbox rows through the app's configured publisher."""
+    publisher = getattr(getattr(app, "state", None), "event_publisher", None)
+    if publisher is None:
+        return 0
+    return dispatch_pending(session, publisher)

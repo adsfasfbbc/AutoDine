@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from autodine_core.dependencies import get_db_session
+from autodine_core.infrastructure.event_bus import dispatch_app_outbox
 from autodine_core.modules import response_envelope
 from autodine_core.modules.order.schemas import CompleteTaskRequest
 from autodine_core.modules.order.service import OrderProcessingError
@@ -25,18 +26,22 @@ def _error_response(exc: OrderProcessingError) -> JSONResponse:
 
 
 @router.post("/{task_id}/start")
-def post_start(task_id: str, session: Session = Depends(get_db_session)) -> Dict[str, Any]:
+def post_start(task_id: str, app_request: Request, session: Session = Depends(get_db_session)) -> Dict[str, Any]:
     try:
-        return response_envelope(start_task(session, task_id))
+        result = start_task(session, task_id)
+        dispatch_app_outbox(session, app_request.app)
+        return response_envelope(result)
     except OrderProcessingError as exc:
         session.rollback()
         return _error_response(exc)
 
 
 @router.post("/{task_id}/ready")
-def post_ready(task_id: str, session: Session = Depends(get_db_session)) -> Dict[str, Any]:
+def post_ready(task_id: str, app_request: Request, session: Session = Depends(get_db_session)) -> Dict[str, Any]:
     try:
-        return response_envelope(ready_task(session, task_id))
+        result = ready_task(session, task_id)
+        dispatch_app_outbox(session, app_request.app)
+        return response_envelope(result)
     except OrderProcessingError as exc:
         session.rollback()
         return _error_response(exc)
@@ -46,10 +51,13 @@ def post_ready(task_id: str, session: Session = Depends(get_db_session)) -> Dict
 def post_complete(
     task_id: str,
     request: CompleteTaskRequest,
+    app_request: Request,
     session: Session = Depends(get_db_session),
 ) -> Dict[str, Any]:
     try:
-        return response_envelope(complete_task(session, task_id, request.actual_consumption))
+        result = complete_task(session, task_id, request.actual_consumption)
+        dispatch_app_outbox(session, app_request.app)
+        return response_envelope(result)
     except OrderProcessingError as exc:
         session.rollback()
         return _error_response(exc)

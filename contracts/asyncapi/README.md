@@ -1,3 +1,4 @@
 # asyncapi
 
-Readable placeholder AsyncAPI documents for AutoDine event streams.
+`autodine-events-v1.yaml` records the frozen raw-edge and Core business event
+namespaces used by MQTT/outbox integrations.

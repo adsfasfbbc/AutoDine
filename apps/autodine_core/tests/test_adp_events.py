@@ -303,6 +303,6 @@ def test_processed_event_creates_outbox_record_with_trace_store_and_publish_stat
     assert outbox.store_id == "store-1"
     assert outbox.event_type == "inventory.changed"
     assert outbox.severity == "info"
-    assert outbox.publish_status == "PENDING"
+    assert outbox.publish_status == "PUBLISHED"
     assert outbox.payload["ingredient_id"] == "cocoa"
     session.close()

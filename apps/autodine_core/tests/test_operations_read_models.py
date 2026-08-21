@@ -138,11 +138,17 @@ def test_websocket_manager_fans_out_adp_envelope_only_to_same_store() -> None:
     client = _build_client()
 
     with client.websocket_connect("/ws/stores/store-1") as subscribed:
-        client.app.state.event_publisher.publish(
-            _event(event_type="queue.updated", event_id="ws-queue-1", payload={"zone_id": "pickup", "waiting_count": 1})
+        response = client.post(
+            "/api/v1/events",
+            json=_event(
+                event_type="queue.updated",
+                event_id="ws-queue-1",
+                payload={"zone_id": "pickup", "waiting_count": 1},
+            ),
         )
+        assert response.status_code == 200
         message = subscribed.receive_json()
 
-    assert message["event_id"] == "ws-queue-1"
+    assert message["event_id"].startswith("outbox-")
     assert message["event_type"] == "queue.updated"
     assert message["store_id"] == "store-1"

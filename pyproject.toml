@@ -6,13 +6,14 @@ build-backend = "setuptools.build_meta"
 name = "autodine"
 version = "0.1.0"
 description = "AutoDine v1 monorepo skeleton and shared interface contracts."
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
     "alembic>=1.13,<2",
     "fastapi>=0.115,<0.116",
     "pydantic-settings>=2.5,<3",
     "psycopg>=3.2,<3.3",
     "sqlalchemy>=2.0,<2.1",
+    "uvicorn[standard]>=0.30,<0.32",
 ]
 
 [project.optional-dependencies]

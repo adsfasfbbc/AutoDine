@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from autodine_core.dependencies import get_db_session
+from autodine_core.infrastructure.event_bus import dispatch_app_outbox
 from autodine_core.modules import response_envelope
 from autodine_core.modules.event.schemas import AdpEventEnvelopeSchema
 from autodine_core.modules.event.service import EventProcessingError, process_event
@@ -56,4 +57,5 @@ def ingest_event(
             ),
         )
 
+    dispatch_app_outbox(session, request.app)
     return response_envelope(result)

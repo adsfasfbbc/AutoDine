@@ -1,41 +1,30 @@
 asyncapi: 3.0.0
 info:
   title: AutoDine Event Stream v1
-  version: 0.0.0-placeholder
+  version: 1.0.0
   description: >
-    Placeholder AsyncAPI contract that records the reserved event namespaces
-    for v1 without freezing channel payloads yet.
+    ADP v1.0 event namespaces; this replaces the initial placeholder contract.
+    Raw edge events use vision.storage/vision.front;
+    Core business events use inventory, menu, order, production, queue, device,
+    alarm, and quality namespaces.
 channels:
-  vision.storage.sample:
-    address: vision.storage.sample
-    messages: {}
-  vision.front.sample:
-    address: vision.front.sample
-    messages: {}
-  inventory.sample:
-    address: inventory.sample
-    messages: {}
-  quality.sample:
-    address: quality.sample
-    messages: {}
-  menu.sample:
-    address: menu.sample
-    messages: {}
-  order.sample:
-    address: order.sample
-    messages: {}
-  production.sample:
-    address: production.sample
-    messages: {}
-  device.sample:
-    address: device.sample
-    messages: {}
-  robot.sample:
-    address: robot.sample
-    messages: {}
-  alarm.sample:
-    address: alarm.sample
-    messages: {}
-  queue.sample:
-    address: queue.sample
-    messages: {}
+  vision.storage.detected: {address: vision.storage.detected}
+  vision.front.queue: {address: vision.front.queue}
+  inventory.detected: {address: inventory.detected}
+  quality.abnormal: {address: quality.abnormal}
+  inventory.changed: {address: inventory.changed}
+  inventory.reserved: {address: inventory.reserved}
+  inventory.released: {address: inventory.released}
+  menu.availability_changed: {address: menu.availability_changed}
+  order.created: {address: order.created}
+  production.task_created: {address: production.task_created}
+  production.task_started: {address: production.task_started}
+  production.task_ready: {address: production.task_ready}
+  production.task_completed: {address: production.task_completed}
+  queue.updated: {address: queue.updated}
+  device.command: {address: device.command}
+  device.command_result: {address: device.command_result}
+  robot.status: {address: robot.status}
+  alarm.opened: {address: alarm.opened}
+  alarm.acknowledged: {address: alarm.acknowledged}
+  alarm.resolved: {address: alarm.resolved}

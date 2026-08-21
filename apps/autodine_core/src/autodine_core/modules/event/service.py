@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from autodine_core.modules.event.models import EventInbox, EventInboxStatus, EventOutbox, PublishStatus
@@ -125,8 +126,9 @@ def _handle_inventory_detected(
     inventory.physical_quantity = Decimal(payload["physical_quantity"])
     if payload.get("defective_quantity") is not None:
         inventory.defective_quantity = Decimal(payload["defective_quantity"])
-    if payload.get("reserved_quantity") is not None:
-        inventory.reserved_quantity = Decimal(payload["reserved_quantity"])
+    # Reservations are Core-owned state. A vision snapshot may report a
+    # reserved field for diagnostics, but it must never overwrite an order's
+    # reservation while applying an edge observation.
 
     trace_id = envelope.trace_id or envelope.event_id
     _append_outbox(
@@ -266,6 +268,14 @@ def process_event(session: Session, envelope: AdpEventEnvelopeSchema) -> Dict[st
             "status": "ignored",
             "event_id": envelope.event_id,
         }
+    except IntegrityError:
+        # Concurrent deliveries can both pass the initial read before one
+        # wins the EventInbox primary-key insert. Treat the losing transaction
+        # as the same idempotent duplicate rather than leaking a 500.
+        session.rollback()
+        if session.get(EventInbox, envelope.event_id) is not None:
+            return {"status": "duplicate", "event_id": envelope.event_id}
+        raise
     except Exception:
         session.rollback()
         raise

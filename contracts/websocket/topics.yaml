@@ -1,14 +1,26 @@
 version: v1
-description: Placeholder topic registry for websocket fan-out.
+endpoint: /ws/stores/{store_id}
+description: >
+  Store-scoped realtime fan-out replacing the initial placeholder registry.
+  Messages are ADP-compatible envelopes and are
+  emitted only to subscribers for the matching store_id.
 topics:
-  - vision.storage.sample
-  - vision.front.sample
-  - inventory.sample
-  - quality.sample
-  - menu.sample
-  - order.sample
-  - production.sample
-  - device.sample
-  - robot.sample
-  - alarm.sample
-  - queue.sample
+  - vision.storage.detected
+  - vision.front.queue
+  - inventory.changed
+  - inventory.reserved
+  - inventory.released
+  - menu.availability_changed
+  - order.created
+  - production.task_created
+  - production.task_started
+  - production.task_ready
+  - production.task_completed
+  - queue.updated
+  - device.command
+  - device.command_result
+  - quality.abnormal
+  - robot.status
+  - alarm.opened
+  - alarm.acknowledged
+  - alarm.resolved

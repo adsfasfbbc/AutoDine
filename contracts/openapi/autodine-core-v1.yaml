@@ -1,11 +1,163 @@
 openapi: 3.1.0
 info:
   title: AutoDine Core API v1
-  version: 0.0.0-placeholder
-  summary: Placeholder contract for the AutoDine Core v1 HTTP API.
+  version: 1.0.0
+  summary: Core business and operations API.
   description: >
-    This document intentionally reserves the v1 contract location without
-    inventing business endpoints before the API surface is frozen.
-servers: []
-paths: {}
-components: {}
+    AutoDineCore is the business source of truth. This replaces the original
+    placeholder while retaining its stable contract path. REST responses use the
+    common code/message/request_id/timestamp/data envelope; ADP event payloads
+    use the shared contracts/adp/v1 envelope schema.
+servers:
+  - url: http://localhost:8000
+paths:
+  /health:
+    get:
+      operationId: health
+      responses:
+        '200': {description: Service health}
+  /api/v1/inventory:
+    get:
+      operationId: listInventory
+      responses:
+        '200': {description: Inventory snapshots}
+  /api/v1/menu:
+    get:
+      operationId: listMenu
+      responses:
+        '200': {description: Menu availability projection}
+  /api/v1/menu/{product_id}:
+    get:
+      operationId: getMenuItem
+      parameters:
+        - {$ref: '#/components/parameters/ProductId'}
+      responses:
+        '200': {description: Menu item}
+        '404': {description: Product not found}
+  /api/v1/events:
+    post:
+      operationId: ingestAdpEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '../adp/v1/envelope.schema.json'}
+      responses:
+        '200': {description: Processed, ignored, or duplicate event}
+        '422': {description: Invalid ADP envelope}
+  /api/v1/orders:
+    post:
+      operationId: createOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/OrderCreate'}
+      responses:
+        '200': {description: Confirmed order and production task}
+        '409': {description: Inventory, menu, or idempotency conflict}
+  /api/v1/orders/{order_id}:
+    get:
+      operationId: getOrder
+      parameters:
+        - {$ref: '#/components/parameters/OrderId'}
+      responses:
+        '200': {description: Order detail}
+        '404': {description: Order not found}
+  /api/v1/orders/{order_id}/cancel:
+    post:
+      operationId: cancelOrder
+      parameters:
+        - {$ref: '#/components/parameters/OrderId'}
+      responses:
+        '200': {description: Canceled order}
+        '409': {description: Invalid state transition}
+  /api/v1/production/tasks/{task_id}/start:
+    post:
+      operationId: startProductionTask
+      parameters:
+        - {$ref: '#/components/parameters/TaskId'}
+      responses: {'200': {description: Task started}}
+  /api/v1/production/tasks/{task_id}/ready:
+    post:
+      operationId: readyProductionTask
+      parameters:
+        - {$ref: '#/components/parameters/TaskId'}
+      responses: {'200': {description: Task ready}}
+  /api/v1/production/tasks/{task_id}/complete:
+    post:
+      operationId: completeProductionTask
+      parameters:
+        - {$ref: '#/components/parameters/TaskId'}
+      responses: {'200': {description: Task completed}}
+  /api/v1/queues/{store_id}:
+    get:
+      operationId: listQueueSnapshots
+      parameters:
+        - {$ref: '#/components/parameters/StoreId'}
+      responses: {'200': {description: Queue read model}}
+  /api/v1/devices/{device_id}/commands:
+    post:
+      operationId: issueDeviceCommand
+      parameters:
+        - {$ref: '#/components/parameters/DeviceId'}
+      responses: {'200': {description: Pending device command}}
+    get:
+      operationId: listDeviceCommands
+      parameters:
+        - {$ref: '#/components/parameters/DeviceId'}
+        - {name: store_id, in: query, required: true, schema: {type: string}}
+      responses: {'200': {description: Device command history}}
+  /api/v1/alarms:
+    post:
+      operationId: openAlarm
+      responses: {'200': {description: Open or existing alarm}}
+    get:
+      operationId: listAlarms
+      parameters:
+        - {name: store_id, in: query, required: true, schema: {type: string}}
+      responses: {'200': {description: Alarm list}}
+  /api/v1/alarms/{alarm_id}/acknowledge:
+    post:
+      operationId: acknowledgeAlarm
+      parameters:
+        - {name: alarm_id, in: path, required: true, schema: {type: string}}
+      responses: {'200': {description: Acknowledged alarm}}
+  /api/v1/alarms/{alarm_id}/resolve:
+    post:
+      operationId: resolveAlarm
+      parameters:
+        - {name: alarm_id, in: path, required: true, schema: {type: string}}
+      responses: {'200': {description: Resolved alarm}}
+  /api/v1/analytics/summary:
+    get:
+      operationId: getAnalyticsSummary
+      parameters:
+        - {$ref: '#/components/parameters/StoreId'}
+        - {name: start, in: query, required: true, schema: {type: string, format: date-time}}
+        - {name: end, in: query, required: true, schema: {type: string, format: date-time}}
+      responses: {'200': {description: KPI read model}}
+components:
+  parameters:
+    StoreId: {name: store_id, in: path, required: true, schema: {type: string}}
+    ProductId: {name: product_id, in: path, required: true, schema: {type: string}}
+    OrderId: {name: order_id, in: path, required: true, schema: {type: string}}
+    TaskId: {name: task_id, in: path, required: true, schema: {type: string}}
+    DeviceId: {name: device_id, in: path, required: true, schema: {type: string}}
+  schemas:
+    OrderCreate:
+      type: object
+      required: [store_id, idempotency_key, items]
+      properties:
+        store_id: {type: string}
+        customer_id: {type: string}
+        idempotency_key: {type: string}
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [product_id, quantity]
+            properties:
+              product_id: {type: string}
+              quantity: {type: integer, minimum: 1}
