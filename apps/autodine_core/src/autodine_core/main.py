@@ -11,6 +11,8 @@ from autodine_core.infrastructure.event_bus import NullEventPublisher
 from autodine_core.modules.event.routes import router as event_router
 from autodine_core.modules.inventory.routes import router as inventory_router
 from autodine_core.modules.menu.routes import router as menu_router
+from autodine_core.modules.order.routes import router as order_router
+from autodine_core.modules.production.routes import router as production_router
 
 
 def _utc_timestamp() -> str:
@@ -40,5 +42,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
     app.include_router(inventory_router)
     app.include_router(menu_router)
     app.include_router(event_router)
+    app.include_router(order_router)
+    app.include_router(production_router)
 
     return app
