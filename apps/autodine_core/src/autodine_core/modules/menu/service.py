@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from decimal import Decimal
-from typing import Dict, List, Union
+from typing import Any, Dict, Iterable as TypingIterable, List, Union
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 from autodine_core.modules.inventory.models import Ingredient, Inventory, InventoryPolicy
 from autodine_core.modules.inventory.service import calculate_available_quantity
 from autodine_core.modules.menu.models import Product, ProductStatus
-from autodine_core.modules.recipe.models import Recipe
+from autodine_core.modules.recipe.models import Recipe, RecipeItem
 
 
 def _item_value(item: object, field_name: str) -> object:
@@ -49,7 +49,7 @@ def calculate_product_quantity(
     return minimum_quantity
 
 
-def recalculate_product_availability(session: Session, product_id: str) -> Product:
+def recalculate_product_availability(session: Session, product_id: str, commit: bool = True) -> Product:
     product = session.scalar(
         select(Product)
         .where(Product.product_id == product_id)
@@ -87,6 +87,41 @@ def recalculate_product_availability(session: Session, product_id: str) -> Produ
     product.available_product_quantity = available_product_quantity
     product.status = ProductStatus.ON_SALE if available_product_quantity > 0 else ProductStatus.SOLD_OUT
     session.add(product)
-    session.commit()
-    session.refresh(product)
+    if commit:
+        session.commit()
+        session.refresh(product)
     return product
+
+
+def recalculate_products_for_ingredients(
+    session: Session,
+    ingredient_ids: TypingIterable[str],
+) -> List[Dict[str, Any]]:
+    session.flush()
+    product_ids = session.scalars(
+        select(Recipe.product_id)
+        .join(RecipeItem, RecipeItem.recipe_id == Recipe.recipe_id)
+        .where(RecipeItem.ingredient_id.in_(list(ingredient_ids)))
+        .distinct()
+        .order_by(Recipe.product_id)
+    ).all()
+
+    changes: List[Dict[str, Any]] = []
+    for product_id in product_ids:
+        product = session.get(Product, product_id)
+        previous_status = product.status.value
+        previous_quantity = product.available_product_quantity
+        product = recalculate_product_availability(session, product_id, commit=False)
+        changes.append(
+            {
+                "product_id": product.product_id,
+                "previous_status": previous_status,
+                "current_status": product.status.value,
+                "previous_available_product_quantity": previous_quantity,
+                "current_available_product_quantity": product.available_product_quantity,
+                "changed": previous_status != product.status.value
+                or previous_quantity != product.available_product_quantity,
+            }
+        )
+
+    return changes

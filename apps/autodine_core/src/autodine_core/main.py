@@ -7,6 +7,8 @@ from fastapi import FastAPI
 
 from autodine_core.config import Settings, build_settings
 from autodine_core.infrastructure.database import Base, build_engine, build_session_factory
+from autodine_core.infrastructure.event_bus import NullEventPublisher
+from autodine_core.modules.event.routes import router as event_router
 from autodine_core.modules.inventory.routes import router as inventory_router
 from autodine_core.modules.menu.routes import router as menu_router
 
@@ -25,6 +27,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
     app.state.engine = engine
     app.state.session_factory = session_factory
     app.state.metadata = Base.metadata
+    app.state.event_publisher = NullEventPublisher()
 
     @app.get("/health")
     def healthcheck() -> Dict[str, str]:
@@ -36,5 +39,6 @@ def create_app(database_url: str | None = None) -> FastAPI:
 
     app.include_router(inventory_router)
     app.include_router(menu_router)
+    app.include_router(event_router)
 
     return app

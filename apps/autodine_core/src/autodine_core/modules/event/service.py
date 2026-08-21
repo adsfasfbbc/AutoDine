@@ -1,0 +1,245 @@
+from __future__ import annotations
+
+from decimal import Decimal
+from typing import Any, Dict, Iterable, List, Optional
+from uuid import uuid4
+
+from fastapi.encoders import jsonable_encoder
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from autodine_core.modules.event.models import EventInbox, EventInboxStatus, EventOutbox, PublishStatus
+from autodine_core.modules.event.schemas import AdpEventEnvelopeSchema
+from autodine_core.modules.inventory.models import Ingredient, Inventory
+from autodine_core.modules.inventory.service import calculate_available_quantity
+from autodine_core.modules.menu.service import recalculate_products_for_ingredients
+from autodine_core.modules.recipe.models import RecipeItem
+
+
+class EventProcessingError(Exception):
+    def __init__(self, *, code: str, message: str, http_status: int) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.http_status = http_status
+
+
+def _serialize_decimal(value: Decimal) -> str:
+    normalized = format(value.normalize(), "f")
+    if "." in normalized:
+        normalized = normalized.rstrip("0").rstrip(".")
+    return normalized or "0"
+
+
+def _build_inbox_record(envelope: AdpEventEnvelopeSchema, *, status: EventInboxStatus) -> EventInbox:
+    return EventInbox(
+        event_id=envelope.event_id,
+        trace_id=envelope.trace_id or envelope.event_id,
+        store_id=envelope.store_id,
+        event_type=envelope.event_type,
+        source_module=envelope.source.module,
+        source_device_id=envelope.source.device_id,
+        occurred_at=envelope.timestamp,
+        status=status,
+        payload=jsonable_encoder(envelope.payload),
+    )
+
+
+def _append_outbox(
+    session: Session,
+    *,
+    trace_id: str,
+    store_id: str,
+    event_type: str,
+    severity: str,
+    payload: Dict[str, Any],
+) -> None:
+    session.add(
+        EventOutbox(
+            outbox_id=uuid4().hex,
+            trace_id=trace_id,
+            store_id=store_id,
+            event_type=event_type,
+            severity=severity,
+            payload=payload,
+            publish_status=PublishStatus.PENDING,
+        )
+    )
+
+
+def _get_ingredient_or_error(session: Session, ingredient_id: str) -> Ingredient:
+    ingredient = session.get(Ingredient, ingredient_id)
+    if ingredient is None:
+        raise EventProcessingError(
+            code="UNKNOWN_INGREDIENT",
+            message="unknown ingredient",
+            http_status=404,
+        )
+    return ingredient
+
+
+def _inventory_changed_payload(inventory: Inventory) -> Dict[str, Any]:
+    return {
+        "ingredient_id": inventory.ingredient_id,
+        "location_id": inventory.location_id,
+        "physical_quantity": _serialize_decimal(inventory.physical_quantity),
+        "defective_quantity": _serialize_decimal(inventory.defective_quantity),
+        "reserved_quantity": _serialize_decimal(inventory.reserved_quantity),
+        "available_quantity": _serialize_decimal(
+            calculate_available_quantity(
+                inventory.physical_quantity,
+                inventory.defective_quantity,
+                inventory.reserved_quantity,
+            )
+        ),
+    }
+
+
+def _handle_inventory_detected(
+    session: Session,
+    envelope: AdpEventEnvelopeSchema,
+) -> None:
+    payload = envelope.payload
+    ingredient = _get_ingredient_or_error(session, payload["ingredient_id"])
+
+    if ingredient.unit != payload["unit"]:
+        raise EventProcessingError(
+            code="INVALID_EVENT_PAYLOAD",
+            message="ingredient unit mismatch",
+            http_status=422,
+        )
+
+    inventory = session.get(Inventory, (envelope.store_id, ingredient.ingredient_id, payload["location_id"]))
+    if inventory is None:
+        inventory = Inventory(
+            store_id=envelope.store_id,
+            ingredient_id=ingredient.ingredient_id,
+            location_id=payload["location_id"],
+            physical_quantity=Decimal("0"),
+            defective_quantity=Decimal("0"),
+            reserved_quantity=Decimal("0"),
+            reorder_threshold=Decimal("0"),
+        )
+        session.add(inventory)
+
+    inventory.physical_quantity = Decimal(payload["physical_quantity"])
+    if payload.get("defective_quantity") is not None:
+        inventory.defective_quantity = Decimal(payload["defective_quantity"])
+    if payload.get("reserved_quantity") is not None:
+        inventory.reserved_quantity = Decimal(payload["reserved_quantity"])
+
+    trace_id = envelope.trace_id or envelope.event_id
+    _append_outbox(
+        session,
+        trace_id=trace_id,
+        store_id=envelope.store_id,
+        event_type="inventory.changed",
+        severity="info",
+        payload=_inventory_changed_payload(inventory),
+    )
+
+    for change in recalculate_products_for_ingredients(session, [ingredient.ingredient_id]):
+        if change["changed"]:
+            _append_outbox(
+                session,
+                trace_id=trace_id,
+                store_id=envelope.store_id,
+                event_type="menu.availability_changed",
+                severity="info",
+                payload={
+                    "product_id": change["product_id"],
+                    "previous_status": change["previous_status"],
+                    "current_status": change["current_status"],
+                    "previous_available_product_quantity": change["previous_available_product_quantity"],
+                    "current_available_product_quantity": change["current_available_product_quantity"],
+                },
+            )
+
+
+def _handle_quality_abnormal(
+    session: Session,
+    envelope: AdpEventEnvelopeSchema,
+) -> None:
+    payload = envelope.payload
+    ingredient = _get_ingredient_or_error(session, payload["ingredient_id"])
+    defective_quantity = payload.get("defective_quantity", payload.get("quantity"))
+
+    inventory = session.get(Inventory, (envelope.store_id, ingredient.ingredient_id, payload["location_id"]))
+    if inventory is None:
+        inventory = Inventory(
+            store_id=envelope.store_id,
+            ingredient_id=ingredient.ingredient_id,
+            location_id=payload["location_id"],
+            physical_quantity=Decimal("0"),
+            defective_quantity=Decimal("0"),
+            reserved_quantity=Decimal("0"),
+            reorder_threshold=Decimal("0"),
+        )
+        session.add(inventory)
+
+    inventory.defective_quantity = Decimal(defective_quantity)
+
+    trace_id = envelope.trace_id or envelope.event_id
+    _append_outbox(
+        session,
+        trace_id=trace_id,
+        store_id=envelope.store_id,
+        event_type="inventory.changed",
+        severity="info",
+        payload=_inventory_changed_payload(inventory),
+    )
+
+    for change in recalculate_products_for_ingredients(session, [ingredient.ingredient_id]):
+        if change["changed"]:
+            _append_outbox(
+                session,
+                trace_id=trace_id,
+                store_id=envelope.store_id,
+                event_type="menu.availability_changed",
+                severity="info",
+                payload={
+                    "product_id": change["product_id"],
+                    "previous_status": change["previous_status"],
+                    "current_status": change["current_status"],
+                    "previous_available_product_quantity": change["previous_available_product_quantity"],
+                    "current_available_product_quantity": change["current_available_product_quantity"],
+                },
+            )
+
+
+def process_event(session: Session, envelope: AdpEventEnvelopeSchema) -> Dict[str, Any]:
+    try:
+        if session.get(EventInbox, envelope.event_id) is not None:
+            session.rollback()
+            return {
+                "status": "duplicate",
+                "event_id": envelope.event_id,
+            }
+
+        if envelope.event_type == "inventory.detected":
+            session.add(_build_inbox_record(envelope, status=EventInboxStatus.PROCESSED))
+            _handle_inventory_detected(session, envelope)
+            session.commit()
+            return {
+                "status": "processed",
+                "event_id": envelope.event_id,
+            }
+
+        if envelope.event_type == "quality.abnormal":
+            session.add(_build_inbox_record(envelope, status=EventInboxStatus.PROCESSED))
+            _handle_quality_abnormal(session, envelope)
+            session.commit()
+            return {
+                "status": "processed",
+                "event_id": envelope.event_id,
+            }
+
+        session.add(_build_inbox_record(envelope, status=EventInboxStatus.IGNORED))
+        session.commit()
+        return {
+            "status": "ignored",
+            "event_id": envelope.event_id,
+        }
+    except Exception:
+        session.rollback()
+        raise
