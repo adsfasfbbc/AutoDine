@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     database_url: str = Field(
         default="postgresql+psycopg://autodine:autodine@localhost:5432/autodine_core"
     )
+    # Single-store operation: requests that omit store_id fall back to this
+    # store, which matches the seeded catalog. The store_id fields stay in the
+    # REST/ADP protocols as the multi-store reservation.
+    default_store_id: str = "store-main"
 
     model_config = SettingsConfigDict(
         env_prefix="AUTODINE_CORE_",

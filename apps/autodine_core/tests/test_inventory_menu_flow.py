@@ -36,6 +36,7 @@ def _seed_product_with_recipe(
     physical_coffee: Decimal,
     physical_milk: Decimal,
     water_policy: str = "UNLIMITED",
+    store_id: str = "store-1",
 ) -> Product:
     coffee = Ingredient(
         ingredient_id="bean",
@@ -78,7 +79,7 @@ def _seed_product_with_recipe(
             water,
             product,
             Inventory(
-                store_id="store-1",
+                store_id=store_id,
                 ingredient_id="bean",
                 location_id="bar",
                 physical_quantity=physical_coffee,
@@ -87,7 +88,7 @@ def _seed_product_with_recipe(
                 reorder_threshold=Decimal("0"),
             ),
             Inventory(
-                store_id="store-1",
+                store_id=store_id,
                 ingredient_id="milk",
                 location_id="bar",
                 physical_quantity=physical_milk,
@@ -307,3 +308,33 @@ def test_menu_get_is_a_read_only_projection_without_writes() -> None:
     assert persisted.status is ProductStatus.SOLD_OUT
     assert persisted.available_product_quantity == 0
     session.close()
+
+
+def test_menu_get_without_store_id_falls_back_to_default_store() -> None:
+    client = _build_client()
+    session = client.app.state.session_factory()
+    _seed_product_with_recipe(
+        session,
+        physical_coffee=Decimal("600"),
+        physical_milk=Decimal("500"),
+        store_id="store-main",
+    )
+    session.close()
+
+    # Omitting store_id resolves to the configured default store ("store-main").
+    list_response = client.get("/api/v1/menu")
+    assert list_response.status_code == 200
+    assert list_response.json()["data"][0]["product_id"] == "latte"
+    assert list_response.json()["data"][0]["status"] == "ON_SALE"
+    assert list_response.json()["data"][0]["available_product_quantity"] == 5
+
+    detail_response = client.get("/api/v1/menu/latte")
+    assert detail_response.status_code == 200
+    assert detail_response.json()["data"]["status"] == "ON_SALE"
+    assert detail_response.json()["data"]["available_product_quantity"] == 5
+
+    # An explicit store_id keeps its behavior: another store has no stock.
+    explicit_response = client.get("/api/v1/menu/latte", params={"store_id": "store-1"})
+    assert explicit_response.status_code == 200
+    assert explicit_response.json()["data"]["status"] == "SOLD_OUT"
+    assert explicit_response.json()["data"]["available_product_quantity"] == 0

@@ -32,3 +32,14 @@ def test_runtime_and_alembic_default_to_postgresql_urls() -> None:
     parser.read(Path(__file__).resolve().parents[1] / "alembic.ini", encoding="utf-8")
 
     assert parser["alembic"]["sqlalchemy.url"].startswith("postgresql+psycopg://")
+
+
+def test_default_store_id_matches_seeded_catalog() -> None:
+    import json
+
+    settings = build_settings()
+    assert settings.default_store_id == "store-main"
+
+    catalog_path = Path(__file__).resolve().parents[3] / "data" / "seed" / "catalog.json"
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    assert catalog["store_id"] == settings.default_store_id
