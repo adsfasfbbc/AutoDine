@@ -32,3 +32,4 @@ Keep module A independently runnable and compatible with the current AutoDine mo
 - Report separately what was verified with Mock, local model inference, RTSP hardware, Jetson, and Core.
 - Every delivery to the user must explicitly state: what was completed; what was not completed; why each missing item was not completed; what should be done next; and concrete instructions for how to do the next step.
 - After tests pass, commit and push only when authorized. Before pushing, re-check `origin`, branch, diff, and upstream changes; never force-push.
+- If a push fails because of authentication or repository permissions, stop retrying, preserve the local commit, report the exact error, and wait until the user confirms that credentials or permissions have been fixed.
