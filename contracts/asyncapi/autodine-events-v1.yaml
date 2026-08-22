@@ -10,6 +10,7 @@ info:
 channels:
   vision.storage.detected: {address: vision.storage.detected}
   vision.front.queue: {address: vision.front.queue}
+  vision.front.safety: {address: vision.front.safety}
   inventory.detected: {address: inventory.detected}
   quality.abnormal: {address: quality.abnormal}
   inventory.changed: {address: inventory.changed}
@@ -28,3 +29,4 @@ channels:
   alarm.opened: {address: alarm.opened}
   alarm.acknowledged: {address: alarm.acknowledged}
   alarm.resolved: {address: alarm.resolved}
+  alarm.updated: {address: alarm.updated}

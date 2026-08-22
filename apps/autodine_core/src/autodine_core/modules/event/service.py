@@ -340,6 +340,36 @@ def process_event(session: Session, envelope: AdpEventEnvelopeSchema) -> Dict[st
             session.commit()
             return {"status": "processed", "event_id": envelope.event_id}
 
+        if envelope.event_type == "vision.front.safety":
+            from autodine_core.modules.alarm.service import open_alarm
+
+            payload = envelope.payload
+            session.add(_build_inbox_record(envelope, status=EventInboxStatus.PROCESSED))
+            alarm = open_alarm(
+                session,
+                store_id=envelope.store_id,
+                source_key=f"front_safety:{envelope.event_id}",
+                severity=envelope.severity,
+                message=(
+                    f"front safety {payload['event_subtype']}: "
+                    f"confidence={payload['confidence']:.2f} "
+                    f"vision={payload['vision_score']:.2f} "
+                    f"audio={payload['audio_score']:.2f} "
+                    f"duration_ms={payload['duration_ms']} "
+                    f"zone={payload['zone_id']}"
+                ),
+            )
+            _append_outbox(
+                session,
+                trace_id=envelope.trace_id or envelope.event_id,
+                store_id=envelope.store_id,
+                event_type="alarm.updated",
+                severity=envelope.severity,
+                payload=alarm,
+            )
+            session.commit()
+            return {"status": "processed", "event_id": envelope.event_id}
+
         session.add(_build_inbox_record(envelope, status=EventInboxStatus.IGNORED))
         session.commit()
         return {

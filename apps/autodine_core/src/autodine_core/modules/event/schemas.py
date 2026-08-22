@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
@@ -55,6 +55,17 @@ class VisionStorageDetectedPayloadSchema(BaseModel):
 
     location_id: str
     detections: List[VisionStorageDetectionSchema] = Field(min_length=1)
+
+
+class VisionFrontSafetyPayloadSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    event_subtype: Literal["violent_interaction"]
+    confidence: float = Field(ge=0.0, le=1.0)
+    vision_score: float = Field(ge=0.0, le=1.0)
+    audio_score: float = Field(ge=0.0, le=1.0)
+    duration_ms: int = Field(ge=0)
+    zone_id: str = Field(min_length=1)
 
 
 class QueueUpdatedPayloadSchema(BaseModel):
@@ -117,4 +128,6 @@ class AdpEventEnvelopeSchema(BaseModel):
             return QueueUpdatedPayloadSchema.model_validate(value).model_dump(exclude_none=True)
         if event_type == "device.command_result":
             return DeviceCommandResultPayloadSchema.model_validate(value).model_dump()
+        if event_type == "vision.front.safety":
+            return VisionFrontSafetyPayloadSchema.model_validate(value).model_dump()
         return value

@@ -24,3 +24,4 @@ topics:
   - alarm.opened
   - alarm.acknowledged
   - alarm.resolved
+  - alarm.updated
