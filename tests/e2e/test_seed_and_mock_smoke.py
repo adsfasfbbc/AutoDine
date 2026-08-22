@@ -68,9 +68,9 @@ def test_seed_is_idempotent_and_mock_inventory_flow_creates_reservation_and_prod
 
     events = json.loads((REPOSITORY_ROOT / "data" / "mock" / "e2e_inventory_menu_order.json").read_text(encoding="utf-8"))
     assert client.post("/api/v1/events", json=events["sold_out"]).status_code == 200
-    assert client.get("/api/v1/menu/latte").json()["data"]["status"] == ProductStatus.SOLD_OUT.value
+    assert client.get("/api/v1/menu/latte", params={"store_id": "store-main"}).json()["data"]["status"] == ProductStatus.SOLD_OUT.value
     assert client.post("/api/v1/events", json=events["recovered"]).status_code == 200
-    assert client.get("/api/v1/menu/latte").json()["data"]["status"] == ProductStatus.ON_SALE.value
+    assert client.get("/api/v1/menu/latte", params={"store_id": "store-main"}).json()["data"]["status"] == ProductStatus.ON_SALE.value
 
     order = client.post(
         "/api/v1/orders",

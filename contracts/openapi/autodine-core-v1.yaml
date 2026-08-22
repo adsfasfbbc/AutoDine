@@ -24,6 +24,8 @@ paths:
   /api/v1/menu:
     get:
       operationId: listMenu
+      parameters:
+        - {name: store_id, in: query, required: true, schema: {type: string}}
       responses:
         '200': {description: Menu availability projection}
   /api/v1/menu/{product_id}:
@@ -31,6 +33,7 @@ paths:
       operationId: getMenuItem
       parameters:
         - {$ref: '#/components/parameters/ProductId'}
+        - {name: store_id, in: query, required: true, schema: {type: string}}
       responses:
         '200': {description: Menu item}
         '404': {description: Product not found}

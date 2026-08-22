@@ -209,7 +209,7 @@ def create_order(session: Session, request: OrderCreate) -> Dict[str, Any]:
             if product is None or product.recipe is None:
                 raise OrderProcessingError(code=4092, message="product unavailable")
             # Re-read current stock before reserving. This intentionally avoids relying on a stale menu projection.
-            recalculate_product_availability(session, product.product_id, commit=False)
+            recalculate_product_availability(session, product.product_id, request.store_id, commit=False)
             if product.status is ProductStatus.SOLD_OUT:
                 raise OrderProcessingError(code=4092, message="product unavailable")
             if product.available_product_quantity < item.quantity:

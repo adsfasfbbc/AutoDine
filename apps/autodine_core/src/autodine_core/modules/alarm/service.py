@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from autodine_core.modules.alarm.models import Alarm, AlarmStatus
@@ -24,7 +25,17 @@ def open_alarm(session: Session, *, store_id: str, source_key: str, severity: st
         return _data(alarm)
     alarm = Alarm(store_id=store_id, source_key=source_key, severity=severity, message=message)
     session.add(alarm)
-    session.flush()
+    try:
+        session.flush()
+    except IntegrityError:
+        # Concurrent openers can both pass the existence check before one wins
+        # the uq_alarms_store_source_key insert; the loser returns the winner's
+        # alarm instead of leaking a 500.
+        session.rollback()
+        raced = session.query(Alarm).filter_by(store_id=store_id, source_key=source_key).one_or_none()
+        if raced is not None:
+            return _data(raced)
+        raise
     _append_outbox(session, trace_id=alarm.alarm_id, store_id=store_id, event_type="alarm.opened", severity=severity, payload=_data(alarm))
     session.commit()
     return _data(alarm)

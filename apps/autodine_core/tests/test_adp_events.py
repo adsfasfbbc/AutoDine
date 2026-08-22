@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+import json
 from pathlib import Path
 import sys
 
@@ -254,7 +255,7 @@ def test_quality_abnormal_updates_defective_quantity_without_double_subtracting_
         )
     )
     session.commit()
-    recalculate_product_availability(session, "latte")
+    recalculate_product_availability(session, "latte", "store-1")
     session.close()
 
     response = client.post(
@@ -305,4 +306,90 @@ def test_processed_event_creates_outbox_record_with_trace_store_and_publish_stat
     assert outbox.severity == "info"
     assert outbox.publish_status == "PUBLISHED"
     assert outbox.payload["ingredient_id"] == "cocoa"
+    session.close()
+
+
+MOCK_FIXTURES = Path(__file__).resolve().parents[3] / "data" / "mock"
+
+
+def _seed_milk_product(session: Session) -> None:
+    session.add_all(
+        [
+            Ingredient(
+                ingredient_id="milk",
+                name="Milk",
+                unit="ml",
+                inventory_policy="TRACKED",
+            ),
+            Product(
+                product_id="milk-tea",
+                name="Milk Tea",
+                price=Decimal("12.00"),
+            ),
+        ]
+    )
+    session.flush()
+    recipe = Recipe(recipe_id="milk-tea-bom", product_id="milk-tea")
+    recipe.items.append(RecipeItem(ingredient_id="milk", quantity=Decimal("80"), unit="ml"))
+    session.add(recipe)
+    session.commit()
+
+
+def test_vision_storage_detected_fixture_replay_updates_inventory_and_menu() -> None:
+    client = _build_client()
+    session = client.app.state.session_factory()
+    _seed_milk_product(session)
+    session.close()
+
+    fixture = json.loads((MOCK_FIXTURES / "storage_detection.json").read_text(encoding="utf-8"))
+    response = client.post("/api/v1/events", json=fixture)
+
+    assert response.status_code == 200
+    assert response.json()["data"]["status"] == "processed"
+
+    session = client.app.state.session_factory()
+    inventory = session.get(Inventory, ("store-main", "milk", "bar"))
+    assert inventory is not None
+    assert inventory.physical_quantity == Decimal("12000")
+    product = session.get(Product, "milk-tea")
+    assert product.status is ProductStatus.ON_SALE
+    assert product.available_product_quantity == 150
+    outbox_types = [row.event_type for row in session.scalars(select(EventOutbox).order_by(EventOutbox.created_at)).all()]
+    assert outbox_types == ["inventory.changed", "menu.availability_changed"]
+    session.close()
+
+
+def test_vision_storage_detected_skips_low_confidence_detections() -> None:
+    client = _build_client()
+    session = client.app.state.session_factory()
+    _seed_milk_product(session)
+    session.close()
+
+    response = client.post(
+        "/api/v1/events",
+        json={
+            "protocol": "ADP",
+            "version": "1.0",
+            "event_id": "evt-vision-low-confidence",
+            "trace_id": "trace-evt-vision-low-confidence",
+            "event_type": "vision.storage.detected",
+            "severity": "info",
+            "timestamp": "2026-08-21T10:30:00Z",
+            "store_id": "store-1",
+            "source": {"module": "smart_storage_vision", "device_id": "cam-01"},
+            "payload": {
+                "location_id": "bar",
+                "detections": [
+                    {"ingredient_id": "milk", "quantity": "500", "unit": "ml", "confidence": 0.1},
+                ],
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["status"] == "processed"
+
+    session = client.app.state.session_factory()
+    assert session.get(Inventory, ("store-1", "milk", "bar")) is None
+    assert _count_rows(session, EventOutbox) == 0
     session.close()

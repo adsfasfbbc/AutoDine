@@ -8,5 +8,5 @@
   "timestamp": "2026-08-21T10:00:00Z",
   "store_id": "store-main",
   "source": {"module": "smart_storage_vision", "device_id": "storage-cam-01"},
-  "payload": {"detections": [{"ingredient_id": "milk", "confidence": 0.98}], "location_id": "bar"}
+  "payload": {"location_id": "bar", "detections": [{"ingredient_id": "milk", "quantity": "12000", "unit": "ml", "confidence": 0.98}]}
 }

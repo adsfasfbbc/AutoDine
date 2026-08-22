@@ -152,3 +152,50 @@ def test_websocket_manager_fans_out_adp_envelope_only_to_same_store() -> None:
     assert message["event_id"].startswith("outbox-")
     assert message["event_type"] == "queue.updated"
     assert message["store_id"] == "store-1"
+
+
+def test_open_alarm_unique_race_returns_existing_alarm_instead_of_500(tmp_path) -> None:
+    from sqlalchemy import event as sqlalchemy_event
+    from sqlalchemy import insert
+
+    from autodine_core.modules.alarm.service import open_alarm
+
+    database_url = "sqlite+pysqlite:///" + str(tmp_path / "alarm-race.db")
+    app = create_app(database_url=database_url)
+    app.state.metadata.create_all(app.state.engine)
+    session = app.state.session_factory()
+
+    injected = False
+
+    @sqlalchemy_event.listens_for(session, "before_flush")
+    def _inject_competing_insert(target_session, flush_context, instances) -> None:
+        nonlocal injected
+        # Fire only on the flush that actually inserts the new alarm, and only once.
+        if injected or not any(isinstance(obj, Alarm) for obj in target_session.new):
+            return
+        injected = True
+        with app.state.engine.begin() as connection:
+            connection.execute(
+                insert(Alarm).values(
+                    alarm_id="raced-alarm",
+                    store_id="store-1",
+                    source_key="machine-1:overheat",
+                    severity="critical",
+                    message="overheat",
+                    status=AlarmStatus.OPEN,
+                )
+            )
+
+    result = open_alarm(
+        session,
+        store_id="store-1",
+        source_key="machine-1:overheat",
+        severity="critical",
+        message="overheat",
+    )
+
+    assert injected
+    assert result["alarm_id"] == "raced-alarm"
+    assert result["status"] == "OPEN"
+    assert len(session.scalars(select(Alarm)).all()) == 1
+    session.close()

@@ -96,26 +96,31 @@ def _inventory_changed_payload(inventory: Inventory) -> Dict[str, Any]:
     }
 
 
-def _handle_inventory_detected(
+def _upsert_inventory_snapshot(
     session: Session,
-    envelope: AdpEventEnvelopeSchema,
-) -> None:
-    payload = envelope.payload
-    ingredient = _get_ingredient_or_error(session, payload["ingredient_id"])
+    *,
+    store_id: str,
+    ingredient_id: str,
+    location_id: str,
+    unit: str,
+    physical_quantity: Any,
+    defective_quantity: Any = None,
+) -> Inventory:
+    ingredient = _get_ingredient_or_error(session, ingredient_id)
 
-    if ingredient.unit != payload["unit"]:
+    if ingredient.unit != unit:
         raise EventProcessingError(
             code="INVALID_EVENT_PAYLOAD",
             message="ingredient unit mismatch",
             http_status=422,
         )
 
-    inventory = session.get(Inventory, (envelope.store_id, ingredient.ingredient_id, payload["location_id"]))
+    inventory = session.get(Inventory, (store_id, ingredient.ingredient_id, location_id))
     if inventory is None:
         inventory = Inventory(
-            store_id=envelope.store_id,
+            store_id=store_id,
             ingredient_id=ingredient.ingredient_id,
-            location_id=payload["location_id"],
+            location_id=location_id,
             physical_quantity=Decimal("0"),
             defective_quantity=Decimal("0"),
             reserved_quantity=Decimal("0"),
@@ -123,12 +128,59 @@ def _handle_inventory_detected(
         )
         session.add(inventory)
 
-    inventory.physical_quantity = Decimal(payload["physical_quantity"])
-    if payload.get("defective_quantity") is not None:
-        inventory.defective_quantity = Decimal(payload["defective_quantity"])
+    inventory.physical_quantity = Decimal(physical_quantity)
+    if defective_quantity is not None:
+        inventory.defective_quantity = Decimal(defective_quantity)
     # Reservations are Core-owned state. A vision snapshot may report a
     # reserved field for diagnostics, but it must never overwrite an order's
     # reservation while applying an edge observation.
+    return inventory
+
+
+def _emit_menu_availability_changes(
+    session: Session,
+    *,
+    trace_id: str,
+    store_id: str,
+    ingredient_ids: Iterable[str],
+) -> None:
+    for change in recalculate_products_for_ingredients(session, ingredient_ids, store_id=store_id):
+        if change["changed"]:
+            _append_outbox(
+                session,
+                trace_id=trace_id,
+                store_id=store_id,
+                event_type="menu.availability_changed",
+                severity="info",
+                payload={
+                    "product_id": change["product_id"],
+                    "store_id": change["store_id"],
+                    "previous_status": change["previous_status"],
+                    "current_status": change["current_status"],
+                    "previous_available_product_quantity": change["previous_available_product_quantity"],
+                    "current_available_product_quantity": change["current_available_product_quantity"],
+                },
+            )
+
+
+# Detections below this confidence are treated as noise and never touch inventory.
+MIN_VISION_DETECTION_CONFIDENCE = 0.5
+
+
+def _handle_inventory_detected(
+    session: Session,
+    envelope: AdpEventEnvelopeSchema,
+) -> None:
+    payload = envelope.payload
+    inventory = _upsert_inventory_snapshot(
+        session,
+        store_id=envelope.store_id,
+        ingredient_id=payload["ingredient_id"],
+        location_id=payload["location_id"],
+        unit=payload["unit"],
+        physical_quantity=payload["physical_quantity"],
+        defective_quantity=payload.get("defective_quantity"),
+    )
 
     trace_id = envelope.trace_id or envelope.event_id
     _append_outbox(
@@ -139,23 +191,51 @@ def _handle_inventory_detected(
         severity="info",
         payload=_inventory_changed_payload(inventory),
     )
+    _emit_menu_availability_changes(
+        session,
+        trace_id=trace_id,
+        store_id=envelope.store_id,
+        ingredient_ids=[inventory.ingredient_id],
+    )
 
-    for change in recalculate_products_for_ingredients(session, [ingredient.ingredient_id]):
-        if change["changed"]:
-            _append_outbox(
-                session,
-                trace_id=trace_id,
-                store_id=envelope.store_id,
-                event_type="menu.availability_changed",
-                severity="info",
-                payload={
-                    "product_id": change["product_id"],
-                    "previous_status": change["previous_status"],
-                    "current_status": change["current_status"],
-                    "previous_available_product_quantity": change["previous_available_product_quantity"],
-                    "current_available_product_quantity": change["current_available_product_quantity"],
-                },
-            )
+
+def _handle_vision_storage_detected(
+    session: Session,
+    envelope: AdpEventEnvelopeSchema,
+) -> None:
+    """Translate a raw smart-storage vision frame into inventory snapshots."""
+    payload = envelope.payload
+    trace_id = envelope.trace_id or envelope.event_id
+    changed_ingredient_ids: List[str] = []
+
+    for detection in payload["detections"]:
+        if float(detection.get("confidence", 1.0)) < MIN_VISION_DETECTION_CONFIDENCE:
+            continue
+        inventory = _upsert_inventory_snapshot(
+            session,
+            store_id=envelope.store_id,
+            ingredient_id=detection["ingredient_id"],
+            location_id=payload["location_id"],
+            unit=detection["unit"],
+            physical_quantity=detection["quantity"],
+        )
+        changed_ingredient_ids.append(inventory.ingredient_id)
+        _append_outbox(
+            session,
+            trace_id=trace_id,
+            store_id=envelope.store_id,
+            event_type="inventory.changed",
+            severity="info",
+            payload=_inventory_changed_payload(inventory),
+        )
+
+    if changed_ingredient_ids:
+        _emit_menu_availability_changes(
+            session,
+            trace_id=trace_id,
+            store_id=envelope.store_id,
+            ingredient_ids=changed_ingredient_ids,
+        )
 
 
 def _handle_quality_abnormal(
@@ -190,23 +270,12 @@ def _handle_quality_abnormal(
         severity="info",
         payload=_inventory_changed_payload(inventory),
     )
-
-    for change in recalculate_products_for_ingredients(session, [ingredient.ingredient_id]):
-        if change["changed"]:
-            _append_outbox(
-                session,
-                trace_id=trace_id,
-                store_id=envelope.store_id,
-                event_type="menu.availability_changed",
-                severity="info",
-                payload={
-                    "product_id": change["product_id"],
-                    "previous_status": change["previous_status"],
-                    "current_status": change["current_status"],
-                    "previous_available_product_quantity": change["previous_available_product_quantity"],
-                    "current_available_product_quantity": change["current_available_product_quantity"],
-                },
-            )
+    _emit_menu_availability_changes(
+        session,
+        trace_id=trace_id,
+        store_id=envelope.store_id,
+        ingredient_ids=[ingredient.ingredient_id],
+    )
 
 
 def process_event(session: Session, envelope: AdpEventEnvelopeSchema) -> Dict[str, Any]:
@@ -230,6 +299,15 @@ def process_event(session: Session, envelope: AdpEventEnvelopeSchema) -> Dict[st
         if envelope.event_type == "quality.abnormal":
             session.add(_build_inbox_record(envelope, status=EventInboxStatus.PROCESSED))
             _handle_quality_abnormal(session, envelope)
+            session.commit()
+            return {
+                "status": "processed",
+                "event_id": envelope.event_id,
+            }
+
+        if envelope.event_type == "vision.storage.detected":
+            session.add(_build_inbox_record(envelope, status=EventInboxStatus.PROCESSED))
+            _handle_vision_storage_detected(session, envelope)
             session.commit()
             return {
                 "status": "processed",

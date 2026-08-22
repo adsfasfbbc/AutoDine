@@ -21,6 +21,7 @@ class EventInboxStatus(str, Enum):
 
 class PublishStatus(str, Enum):
     PENDING = "PENDING"
+    DISPATCHING = "DISPATCHING"
     PUBLISHED = "PUBLISHED"
     FAILED = "FAILED"
 

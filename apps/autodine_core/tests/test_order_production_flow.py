@@ -96,7 +96,7 @@ def _seed_menu_catalog(session: Session) -> None:
         ]
     )
     session.commit()
-    recalculate_product_availability(session, "latte")
+    recalculate_product_availability(session, "latte", "store-1")
 
 
 def test_create_order_reserves_inventory_creates_task_and_outbox_events() -> None:
@@ -194,7 +194,7 @@ def test_create_order_returns_4092_when_product_is_sold_out_or_unavailable() -> 
     bean_inventory = session.get(Inventory, ("store-1", "bean", "bar"))
     bean_inventory.physical_quantity = Decimal("0")
     session.commit()
-    recalculate_product_availability(session, "latte")
+    recalculate_product_availability(session, "latte", "store-1")
     session.close()
 
     response = client.post(

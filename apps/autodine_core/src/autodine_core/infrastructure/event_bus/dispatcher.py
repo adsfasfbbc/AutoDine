@@ -2,20 +2,44 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any, Dict
-from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from autodine_core.infrastructure.event_bus.publisher import EventPublisher
 from autodine_core.modules.event.models import EventOutbox, PublishStatus
 
 
+_CLAIMABLE_STATUSES = (PublishStatus.PENDING, PublishStatus.FAILED)
+
+
 def dispatch_pending(session: Session, publisher: EventPublisher) -> int:
-    """Publish committed outbox rows; failures are recorded after business commit."""
-    rows = session.scalars(select(EventOutbox).where(EventOutbox.publish_status == PublishStatus.PENDING).order_by(EventOutbox.created_at)).all()
+    """Publish committed outbox rows; failures are recorded after business commit.
+
+    Rows are claimed one at a time via an atomic PENDING/FAILED -> DISPATCHING
+    flip, so concurrent dispatchers never publish the same row twice. FAILED
+    rows stay claimable and are retried by the next dispatch round.
+    """
+    candidate_ids = session.scalars(
+        select(EventOutbox.outbox_id)
+        .where(EventOutbox.publish_status.in_(_CLAIMABLE_STATUSES))
+        .order_by(EventOutbox.created_at)
+    ).all()
     delivered = 0
-    for row in rows:
+    for outbox_id in candidate_ids:
+        claimed = session.execute(
+            update(EventOutbox)
+            .where(
+                EventOutbox.outbox_id == outbox_id,
+                EventOutbox.publish_status.in_(_CLAIMABLE_STATUSES),
+            )
+            .values(publish_status=PublishStatus.DISPATCHING)
+        ).rowcount
+        session.commit()
+        if claimed != 1:
+            # A concurrent dispatcher claimed this row first.
+            continue
+        row = session.get(EventOutbox, outbox_id)
         envelope: Dict[str, Any] = {
             "protocol": "ADP",
             "version": "1.0",
@@ -34,7 +58,7 @@ def dispatch_pending(session: Session, publisher: EventPublisher) -> int:
             delivered += 1
         except Exception:
             row.publish_status = PublishStatus.FAILED
-    session.commit()
+        session.commit()
     return delivered
 
 

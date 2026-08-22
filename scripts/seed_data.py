@@ -95,7 +95,7 @@ def seed_database(database_url, catalog_path=DEFAULT_CATALOG):
                 ))
         session.flush()
         for product in catalog["products"]:
-            recalculate_product_availability(session, product["product_id"], commit=False)
+            recalculate_product_availability(session, product["product_id"], store_id=catalog["store_id"], commit=False)
         session.commit()
     except Exception:
         session.rollback()

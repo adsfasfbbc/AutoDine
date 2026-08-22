@@ -226,7 +226,7 @@ def complete_task(
             event_type="production.task_completed",
             payload={"task_id": task.task_id, "order_id": order.order_id, "status": task.status.value},
         )
-        changes = recalculate_products_for_ingredients(session, affected_ingredients)
+        changes = recalculate_products_for_ingredients(session, affected_ingredients, store_id=task.store_id)
         for change in changes:
             if change["changed"]:
                 _append_outbox(

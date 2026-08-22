@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
@@ -39,6 +39,22 @@ class QualityAbnormalPayloadSchema(BaseModel):
         if self.defective_quantity is None and self.quantity is None:
             raise ValueError("defective_quantity or quantity is required")
         return self
+
+
+class VisionStorageDetectionSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ingredient_id: str
+    quantity: Decimal
+    unit: str
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
+class VisionStorageDetectedPayloadSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    location_id: str
+    detections: List[VisionStorageDetectionSchema] = Field(min_length=1)
 
 
 class QueueUpdatedPayloadSchema(BaseModel):
@@ -93,6 +109,8 @@ class AdpEventEnvelopeSchema(BaseModel):
         event_type = info.data.get("event_type")
         if event_type == "inventory.detected":
             return InventoryDetectedPayloadSchema.model_validate(value).model_dump()
+        if event_type == "vision.storage.detected":
+            return VisionStorageDetectedPayloadSchema.model_validate(value).model_dump()
         if event_type == "quality.abnormal":
             return QualityAbnormalPayloadSchema.model_validate(value).model_dump(exclude_none=True)
         if event_type == "queue.updated":
