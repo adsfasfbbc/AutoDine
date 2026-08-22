@@ -19,3 +19,6 @@ Thumbs.db
 
 # Agent scratch reports; durable design/plan files live under docs/superpowers.
 .superpowers/
+
+# M02 front_vision edge service
+edge/front_vision/models/
