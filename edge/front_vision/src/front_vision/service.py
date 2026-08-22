@@ -35,10 +35,13 @@ _DEBUG_PAGE_HTML = """<!DOCTYPE html>
   .big { font-size: 56px; font-weight: 700; color: #4caf50; }
   dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14px; }
   dt { color: #889; } dd { margin: 0; font-family: Consolas, monospace; }
+  #banner { display: none; background: #b3261e; color: #fff; padding: 10px 16px;
+            font-weight: 700; letter-spacing: 1px; text-align: center; }
 </style>
 </head>
 <body>
 <header>DEBUG PREVIEW - 仅本机调试</header>
+<div id="banner"></div>
 <main>
   <div class="video"><img src="/preview.mjpeg" alt="preview"></div>
   <div class="panel">
@@ -59,6 +62,14 @@ async function refresh() {
     document.getElementById("backend").textContent = m.detector_backend;
     document.getElementById("fps").textContent = m.inference_fps;
     document.getElementById("captured").textContent = m.frames_captured;
+    const banner = document.getElementById("banner");
+    if (m.safety_alert) {
+      banner.style.display = "block";
+      banner.textContent = "⚠ 冲突告警 " + m.safety_alert.severity.toUpperCase()
+        + " (vision=" + m.safety_alert.vision_score + ", audio=" + m.safety_alert.audio_score + ")";
+    } else {
+      banner.style.display = "none";
+    }
   } catch (err) { /* service restarting */ }
 }
 refresh();
@@ -108,7 +119,52 @@ def build_pipeline(
         width=config.frame_width,
         height=config.frame_height,
     )
-    return FrontVisionPipeline(config, publisher, capture, detector)
+    safety = _build_safety_engine(config, publisher)
+    return FrontVisionPipeline(config, publisher, capture, detector, safety)
+
+
+def _build_safety_engine(config: FrontVisionConfig, publisher: AdpPublisher):
+    """Wire the vision/audio/fusion safety chain; degrades gracefully.
+
+    Missing pose model or microphone only disables that modality — the AND
+    fusion then never publishes, per design (single-modality = debug log).
+    """
+    if not config.safety_enabled:
+        return None
+    from .safety_fusion import SafetyEngine
+
+    if config.simulate_safety:
+        logger.info("safety simulation enabled; injecting synthetic dual-modality cues")
+        return SafetyEngine(config, publisher, simulate=True)
+
+    vision = None
+    try:
+        from .safety_vision import PoseSafetyAnalyzer
+
+        vision = PoseSafetyAnalyzer(
+            config.yolo_pose_model_path,
+            confidence=config.safety_pose_confidence,
+            window_seconds=config.safety_vision_window_seconds,
+            score_threshold=config.safety_vision_score_threshold,
+            hysteresis_seconds=config.safety_vision_hysteresis_seconds,
+        )
+    except Exception as exc:
+        logger.warning("pose safety analyzer unavailable (%s); vision channel disabled", exc)
+
+    audio = None
+    if config.audio_enabled:
+        from .safety_audio import AcousticArousalMonitor
+
+        audio = AcousticArousalMonitor(
+            device=config.audio_device or None,
+            sample_rate=config.audio_sample_rate,
+            score_threshold=config.safety_audio_score_threshold,
+            baseline_alpha=config.safety_audio_baseline_alpha,
+        )
+    else:
+        logger.info("audio channel disabled (--no-audio); vision-only safety cues will not publish")
+
+    return SafetyEngine(config, publisher, vision_analyzer=vision, audio_monitor=audio)
 
 
 def create_app(
@@ -166,6 +222,7 @@ def create_app(
             "detector_backend": pipeline.backend_name,
             "queue_zone_id": config.queue_zone_id,
             "preview_enabled": config.preview_enabled,
+            "safety_alert": pipeline.safety_alert(),
         }
 
     @app.get("/", response_class=HTMLResponse)

@@ -1,7 +1,8 @@
 """Inference + publishing pipeline for the front_vision edge service.
 
-Runs in a background thread: pulls the newest frame from the capture loop
-and counts people (smoothed, published as queue.updated).
+Runs in a background thread: pulls the newest frame from the capture loop,
+counts people (smoothed, published as queue.updated) and runs the safety
+fusion engine (vision pose + acoustic arousal -> vision.front.safety).
 """
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ from .adp import AdpPublisher
 from .capture import FrameSource
 from .config import FrontVisionConfig
 from .people import CountSmoother, PersonDetector, count_in_roi
+from .safety_fusion import SafetyEngine
 
 logger = logging.getLogger("front_vision.pipeline")
 
@@ -25,11 +27,13 @@ class FrontVisionPipeline:
         publisher: AdpPublisher,
         capture: FrameSource,
         detector: PersonDetector,
+        safety: Optional[SafetyEngine] = None,
     ) -> None:
         self._config = config
         self._publisher = publisher
         self._capture = capture
         self._detector = detector
+        self._safety = safety
         self._smoother = CountSmoother(config.smooth_window_seconds)
 
         self._stop = threading.Event()
@@ -54,17 +58,27 @@ class FrontVisionPipeline:
     def start(self) -> None:
         self._stop.clear()
         self._publisher.start_worker()
+        if self._safety is not None:
+            self._safety.start()
         self._thread = threading.Thread(target=self._run, name="front-vision-pipeline", daemon=True)
         self._thread.start()
 
     def stop(self) -> None:
         self._stop.set()
+        if self._safety is not None:
+            self._safety.stop()
         if self._thread is not None:
             self._thread.join(timeout=5.0)
 
     @property
     def backend_name(self) -> str:
         return self._detector.backend_name
+
+    def safety_alert(self) -> Optional[dict]:
+        """Newest safety alert for the GUI/web banner (None when inactive)."""
+        if self._safety is None:
+            return None
+        return self._safety.alert_state()
 
     # -- publishing --------------------------------------------------------
     def publish_queue_update(self, count: int) -> None:
@@ -122,6 +136,10 @@ class FrontVisionPipeline:
         if count_changed or heartbeat_due:
             self.publish_queue_update(smoothed)
 
+        # --- safety fusion (vision pose AND acoustic arousal) --------------
+        if self._safety is not None:
+            self._safety.update(frame, now)
+
         # --- debug preview frame (memory-only, zero cost when disabled) -----
         if cfg.preview_enabled:
             self._annotate_and_store(frame, detections, smoothed)
@@ -141,6 +159,12 @@ class FrontVisionPipeline:
             annotated, f"count={smoothed_count} fps={self.inference_fps:.1f}", (8, 24),
             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2,
         )
+        alert = self.safety_alert()
+        if alert is not None:
+            cv2.putText(
+                annotated, f"SAFETY {alert['severity']}", (8, 52),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2,
+            )
         ok, buf = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 70])
         if ok:
             with self._preview_lock:

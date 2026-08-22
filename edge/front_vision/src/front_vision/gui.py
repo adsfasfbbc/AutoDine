@@ -64,7 +64,20 @@ class FrontVisionWindow(QMainWindow):
         self.resize(980, 540)
 
         central = QWidget(self)
-        layout = QHBoxLayout(central)
+        root = QVBoxLayout(central)
+        root.setContentsMargins(0, 0, 0, 0)
+
+        # Safety alert banner (hidden unless a fused alert is active).
+        self._banner = QLabel("")
+        self._banner.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._banner.setStyleSheet(
+            "background: #b3261e; color: #fff; font-weight: 700; padding: 10px; letter-spacing: 1px;"
+        )
+        self._banner.hide()
+        root.addWidget(self._banner)
+
+        layout = QHBoxLayout()
+        root.addLayout(layout)
 
         # Left: annotated live frame.
         self._video_label = QLabel("waiting for frames...")
@@ -125,6 +138,16 @@ class FrontVisionWindow(QMainWindow):
         self._publish_label.setText(
             f"{self._publisher.endpoint}\ndropped={self._publisher.dropped_events}"
         )
+
+        alert = pipeline.safety_alert() if hasattr(pipeline, "safety_alert") else None
+        if alert:
+            self._banner.setText(
+                f"⚠ 冲突告警 {alert['severity'].upper()} "
+                f"(vision={alert['vision_score']}, audio={alert['audio_score']})"
+            )
+            self._banner.show()
+        else:
+            self._banner.hide()
 
 
 def run_gui(config: FrontVisionConfig, publish: bool = True) -> int:

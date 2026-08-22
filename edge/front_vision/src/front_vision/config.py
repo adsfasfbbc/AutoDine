@@ -78,6 +78,30 @@ class FrontVisionConfig:
 
     yolo_model_path: str = field(default_factory=lambda: str(MODELS_DIR / "yolo11n.pt"))
 
+    # Safety / conflict detection (vision pose + acoustic arousal fusion).
+    # A vision.front.safety event is published only when BOTH modalities fire
+    # within a ±3s window; single-modality cues are debug-logged only.
+    safety_enabled: bool = field(default_factory=lambda: _bool_env("FV_SAFETY_ENABLED", True))
+    safety_zone_id: str = field(default_factory=lambda: os.getenv("FV_SAFETY_ZONE_ID", "front-hall"))
+    yolo_pose_model_path: str = field(default_factory=lambda: str(MODELS_DIR / "yolo11n-pose.pt"))
+    safety_pose_confidence: float = field(default_factory=lambda: _float_env("FV_SAFETY_POSE_CONFIDENCE", 0.3))
+    safety_vision_window_seconds: float = field(default_factory=lambda: _float_env("FV_SAFETY_VISION_WINDOW_S", 2.0))
+    safety_vision_score_threshold: float = field(default_factory=lambda: _float_env("FV_SAFETY_VISION_THRESHOLD", 0.6))
+    safety_vision_hysteresis_seconds: float = field(default_factory=lambda: _float_env("FV_SAFETY_VISION_HYSTERESIS_S", 2.0))
+    # Acoustic channel: physical features only (loudness/F0/flux/onsets); raw
+    # PCM is kept in a bounded 2s in-memory ring buffer, never persisted.
+    audio_enabled: bool = field(default_factory=lambda: _bool_env("FV_AUDIO_ENABLED", True))
+    audio_device: str = field(default_factory=lambda: os.getenv("FV_AUDIO_DEVICE", ""))
+    audio_sample_rate: int = field(default_factory=lambda: _int_env("FV_AUDIO_SAMPLE_RATE", 16000))
+    safety_audio_score_threshold: float = field(default_factory=lambda: _float_env("FV_SAFETY_AUDIO_THRESHOLD", 0.6))
+    safety_audio_baseline_alpha: float = field(default_factory=lambda: _float_env("FV_SAFETY_AUDIO_BASELINE_ALPHA", 0.02))
+    # Fusion timing.
+    safety_fusion_window_seconds: float = field(default_factory=lambda: _float_env("FV_SAFETY_FUSION_WINDOW_S", 3.0))
+    safety_cooldown_seconds: float = field(default_factory=lambda: _float_env("FV_SAFETY_COOLDOWN_S", 30.0))
+    safety_critical_after_seconds: float = field(default_factory=lambda: _float_env("FV_SAFETY_CRITICAL_AFTER_S", 10.0))
+    # Inject a deterministic dual-modality pattern for demos (--simulate-safety).
+    simulate_safety: bool = False
+
 
 def is_port_free(host: str, port: int) -> bool:
     """Return True if nothing is listening on host:port (IPv4)."""

@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from front_vision.adp import AdpPublisher, validate_envelope  # noqa: E402
 from front_vision.config import ENVELOPE_SCHEMA_PATH, FrontVisionConfig  # noqa: E402
 from front_vision.pipeline import FrontVisionPipeline  # noqa: E402
+from front_vision.safety_fusion import SafetyEngine  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("smoke")
@@ -110,7 +111,10 @@ def run() -> int:
             backoff_seconds=0.1,
             client=_HttpxShim(fake_core),
         )
-        pipeline = FrontVisionPipeline(config, publisher, capture, FakeDetector())
+        pipeline = FrontVisionPipeline(
+            config, publisher, capture, FakeDetector(),
+            SafetyEngine(config, publisher, simulate=True),
+        )
         app = create_app(config, pipeline=pipeline, capture=capture)
 
         deadline = time.monotonic() + 30.0
@@ -126,7 +130,10 @@ def run() -> int:
             while time.monotonic() < deadline:
                 metrics = client.get("/metrics").json()
                 event_types = {e["event_type"] for e in received}
-                if "queue.updated" in event_types:
+                safety_events = [e for e in received if e["event_type"] == "vision.front.safety"]
+                severities = {e["severity"] for e in safety_events}
+                # Simulated cues activate at ~5s and escalate past 10s.
+                if "queue.updated" in event_types and {"warning", "critical"} <= severities:
                     break
                 time.sleep(0.5)
 
@@ -139,6 +146,16 @@ def run() -> int:
 
         queue_events = [e for e in received if e["event_type"] == "queue.updated"]
         assert queue_events[0]["payload"]["waiting_count"] == 1
+
+        safety_events = [e for e in received if e["event_type"] == "vision.front.safety"]
+        assert safety_events, "no vision.front.safety event published"
+        assert safety_events[0]["severity"] == "warning"
+        assert {"warning", "critical"} <= {e["severity"] for e in safety_events}, \
+            "safety episode did not escalate to critical"
+        payload = safety_events[0]["payload"]
+        assert payload["event_subtype"] == "violent_interaction"
+        assert payload["zone_id"] == "front-hall"
+        assert payload["vision_score"] > 0 and payload["audio_score"] > 0
 
     logger.info("SMOKE OK: %d envelopes received (%s)", len(received), sorted(event_types))
     return 0
