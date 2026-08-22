@@ -56,10 +56,8 @@ class FrontVisionConfig:
     # "auto" prefers the torch/CUDA backend and falls back to onnxruntime.
     detector_backend: str = field(default_factory=lambda: os.getenv("FV_DETECTOR_BACKEND", "auto"))
     person_confidence: float = field(default_factory=lambda: _float_env("FV_PERSON_CONFIDENCE", 0.4))
-    face_confidence: float = field(default_factory=lambda: _float_env("FV_FACE_CONFIDENCE", 0.6))
     # Run heavy inference every Nth captured frame to keep CPU/GPU load sane.
     infer_every_n_frames: int = field(default_factory=lambda: _int_env("FV_INFER_EVERY_N_FRAMES", 5))
-    emotion_enabled: bool = field(default_factory=lambda: _bool_env("FV_EMOTION_ENABLED", True))
     # In-browser MJPEG debug preview (annotated frames, memory-only).
     preview_enabled: bool = field(default_factory=lambda: _bool_env("FV_PREVIEW_ENABLED", True))
 
@@ -68,10 +66,6 @@ class FrontVisionConfig:
     queue_roi: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0)
     smooth_window_seconds: float = field(default_factory=lambda: _float_env("FV_SMOOTH_WINDOW_S", 3.0))
     queue_heartbeat_seconds: float = field(default_factory=lambda: _float_env("FV_QUEUE_HEARTBEAT_S", 10.0))
-
-    # Emotion aggregation / publishing
-    emotion_window_seconds: float = field(default_factory=lambda: _float_env("FV_EMOTION_WINDOW_S", 60.0))
-    emotion_publish_seconds: float = field(default_factory=lambda: _float_env("FV_EMOTION_PUBLISH_S", 30.0))
 
     # HTTP publishing
     publish_retries: int = field(default_factory=lambda: _int_env("FV_PUBLISH_RETRIES", 3))
@@ -83,7 +77,6 @@ class FrontVisionConfig:
     port: int = field(default_factory=lambda: _int_env("FV_PORT", 5060))
 
     yolo_model_path: str = field(default_factory=lambda: str(MODELS_DIR / "yolo11n.pt"))
-    yunet_model_path: str = field(default_factory=lambda: str(MODELS_DIR / "face_detection_yunet_2023mar.onnx"))
 
 
 def is_port_free(host: str, port: int) -> bool:

@@ -1,8 +1,8 @@
 """Smoke test for the front_vision service without a camera or GPU.
 
 Generates a synthetic video file, runs the full service (capture loop +
-pipeline + FastAPI) against a stub detector/emotion analyzer and a local
-fake Core receiver, then asserts that valid ADP envelopes were published.
+pipeline + FastAPI) against a stub detector and a local fake Core receiver,
+then asserts that valid ADP envelopes were published.
 
 Usage (from edge/front_vision/):
     .venv/Scripts/python scripts/smoke_front_vision.py
@@ -61,14 +61,6 @@ class FakeDetector:
         return [b for b, _ in self.detect_with_scores(frame)]
 
 
-class FakeEmotionAnalyzer:
-    def analyze(self, frame):
-        return ["positive"]
-
-    def analyze_detailed(self, frame):
-        return [((260, 140, 80, 90), "Happiness", "positive")]
-
-
 def run() -> int:
     from front_vision.capture import FrameSource
     from front_vision.service import create_app
@@ -107,11 +99,8 @@ def run() -> int:
         config.source = str(video)
         config.core_url = "http://fake-core"
         config.queue_heartbeat_seconds = 1.0
-        config.emotion_window_seconds = 10.0
-        config.emotion_publish_seconds = 2.0
         config.smooth_window_seconds = 1.0
         config.infer_every_n_frames = 1
-        config.emotion_enabled = False  # analyzer injected below
 
         capture = FrameSource(source=config.source, width=config.frame_width, height=config.frame_height)
         publisher = AdpPublisher(
@@ -121,7 +110,7 @@ def run() -> int:
             backoff_seconds=0.1,
             client=_HttpxShim(fake_core),
         )
-        pipeline = FrontVisionPipeline(config, publisher, capture, FakeDetector(), FakeEmotionAnalyzer())
+        pipeline = FrontVisionPipeline(config, publisher, capture, FakeDetector())
         app = create_app(config, pipeline=pipeline, capture=capture)
 
         deadline = time.monotonic() + 30.0
@@ -137,7 +126,7 @@ def run() -> int:
             while time.monotonic() < deadline:
                 metrics = client.get("/metrics").json()
                 event_types = {e["event_type"] for e in received}
-                if "queue.updated" in event_types and "customer.experience_summary" in event_types:
+                if "queue.updated" in event_types:
                     break
                 time.sleep(0.5)
 
@@ -146,14 +135,10 @@ def run() -> int:
 
         assert not invalid, f"invalid envelopes received: {invalid}"
         assert "queue.updated" in event_types, "no queue.updated event published"
-        assert "customer.experience_summary" in event_types, "no customer.experience_summary event published"
         assert metrics["current_count"] == 1, f"expected count 1, got {metrics['current_count']}"
 
         queue_events = [e for e in received if e["event_type"] == "queue.updated"]
         assert queue_events[0]["payload"]["waiting_count"] == 1
-        summary_events = [e for e in received if e["event_type"] == "customer.experience_summary"]
-        assert summary_events[0]["payload"]["sample_count"] > 0
-        assert summary_events[0]["payload"]["positive_ratio"] == 1.0
 
     logger.info("SMOKE OK: %d envelopes received (%s)", len(received), sorted(event_types))
     return 0

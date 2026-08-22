@@ -19,7 +19,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
-    QProgressBar,
     QVBoxLayout,
     QWidget,
 )
@@ -90,24 +89,6 @@ class FrontVisionWindow(QMainWindow):
         form.addRow("推理 FPS", self._fps_label)
         form.addRow("Core 发布", self._publish_label)
         panel.addLayout(form)
-
-        panel.addWidget(QLabel("情绪聚合（60s 滑窗）"))
-        self._samples_label = QLabel("样本数: -")
-        panel.addWidget(self._samples_label)
-        self._emotion_bars: dict[str, tuple[str, QLabel, QProgressBar]] = {}
-        for key, text, color in (
-            ("positive_ratio", "positive", "#4caf50"),
-            ("neutral_ratio", "neutral", "#9e9e9e"),
-            ("negative_ratio", "negative", "#ef5350"),
-        ):
-            label = QLabel(f"{text} -")
-            bar = QProgressBar()
-            bar.setRange(0, 100)
-            bar.setTextVisible(False)
-            bar.setStyleSheet(f"QProgressBar::chunk {{ background: {color}; }}")
-            panel.addWidget(label)
-            panel.addWidget(bar)
-            self._emotion_bars[key] = (text, label, bar)
         panel.addStretch(1)
 
         right = QWidget()
@@ -137,7 +118,6 @@ class FrontVisionWindow(QMainWindow):
                 self._video_label.setPixmap(pixmap)
 
         with pipeline._lock:
-            summary = dict(pipeline.last_emotion_summary)
             count = pipeline.current_count
         self._count_label.setText(str(count))
         self._backend_label.setText(pipeline.backend_name)
@@ -145,11 +125,6 @@ class FrontVisionWindow(QMainWindow):
         self._publish_label.setText(
             f"{self._publisher.endpoint}\ndropped={self._publisher.dropped_events}"
         )
-        self._samples_label.setText(f"样本数: {summary['sample_count']}")
-        for key, (name, label, bar) in self._emotion_bars.items():
-            pct = round((summary.get(key) or 0.0) * 100)
-            label.setText(f"{name} {pct}%")
-            bar.setValue(pct)
 
 
 def run_gui(config: FrontVisionConfig, publish: bool = True) -> int:

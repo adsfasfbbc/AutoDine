@@ -35,7 +35,6 @@ _DEBUG_PAGE_HTML = """<!DOCTYPE html>
   .big { font-size: 56px; font-weight: 700; color: #4caf50; }
   dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14px; }
   dt { color: #889; } dd { margin: 0; font-family: Consolas, monospace; }
-  .bar { height: 10px; border-radius: 4px; margin: 2px 0 8px; }
 </style>
 </head>
 <body>
@@ -49,15 +48,7 @@ _DEBUG_PAGE_HTML = """<!DOCTYPE html>
       <dt>推理后端</dt><dd id="backend">-</dd>
       <dt>推理 FPS</dt><dd id="fps">-</dd>
       <dt>采集帧数</dt><dd id="captured">-</dd>
-      <dt>表情样本数</dt><dd id="samples">-</dd>
     </dl>
-    <h2>情绪聚合（60s 滑窗）</h2>
-    <div>positive <span id="pos-v">-</span></div>
-    <div class="bar" id="pos-b" style="background:#4caf50;width:0%"></div>
-    <div>neutral <span id="neu-v">-</span></div>
-    <div class="bar" id="neu-b" style="background:#9e9e9e;width:0%"></div>
-    <div>negative <span id="neg-v">-</span></div>
-    <div class="bar" id="neg-b" style="background:#ef5350;width:0%"></div>
   </div>
 </main>
 <script>
@@ -68,14 +59,6 @@ async function refresh() {
     document.getElementById("backend").textContent = m.detector_backend;
     document.getElementById("fps").textContent = m.inference_fps;
     document.getElementById("captured").textContent = m.frames_captured;
-    const e = m.emotion_summary;
-    document.getElementById("samples").textContent = e.sample_count;
-    const set = (k, id) => {
-      const pct = Math.round((e[k] || 0) * 100);
-      document.getElementById(id + "-v").textContent = pct + "%";
-      document.getElementById(id + "-b").style.width = pct + "%";
-    };
-    set("positive_ratio", "pos"); set("neutral_ratio", "neu"); set("negative_ratio", "neg");
   } catch (err) { /* service restarting */ }
 }
 refresh();
@@ -99,7 +82,7 @@ def build_pipeline(
     publisher: Optional[AdpPublisher] = None,
     capture: Optional[FrameSource] = None,
 ) -> FrontVisionPipeline:
-    """Wire capture, detector, emotion analyzer and pipeline together."""
+    """Wire capture, detector and pipeline together."""
     from .people import PersonDetector
 
     onnx_path = config.yolo_model_path.replace(".pt", ".onnx")
@@ -112,11 +95,6 @@ def build_pipeline(
         backend=config.detector_backend,
         confidence=config.person_confidence,
     )
-    emotion_analyzer = None
-    if config.emotion_enabled:
-        from .emotion import EmotionAnalyzer
-
-        emotion_analyzer = EmotionAnalyzer(config.yunet_model_path, config.face_confidence)
     publisher = publisher or AdpPublisher(
         core_url=config.core_url,
         schema_path=ENVELOPE_SCHEMA_PATH,
@@ -130,7 +108,7 @@ def build_pipeline(
         width=config.frame_width,
         height=config.frame_height,
     )
-    return FrontVisionPipeline(config, publisher, capture, detector, emotion_analyzer)
+    return FrontVisionPipeline(config, publisher, capture, detector)
 
 
 def create_app(
@@ -177,7 +155,6 @@ def create_app(
     @app.get("/metrics")
     def metrics() -> dict:
         with pipeline._lock:
-            emotion_summary = dict(pipeline.last_emotion_summary)
             frames_inferred = pipeline.frames_inferred
             last_frame_at = pipeline.last_frame_at
         return {
@@ -187,7 +164,6 @@ def create_app(
             "inference_fps": round(pipeline.inference_fps, 1),
             "last_frame_at": last_frame_at,
             "detector_backend": pipeline.backend_name,
-            "emotion_summary": emotion_summary,
             "queue_zone_id": config.queue_zone_id,
             "preview_enabled": config.preview_enabled,
         }

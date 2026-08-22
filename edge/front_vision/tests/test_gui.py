@@ -27,12 +27,6 @@ class _StubPipeline:
         self._lock = threading.Lock()
         self.current_count = 3
         self.inference_fps = 12.34
-        self.last_emotion_summary = {
-            "sample_count": 10,
-            "positive_ratio": 0.5,
-            "neutral_ratio": 0.3,
-            "negative_ratio": 0.2,
-        }
         self._jpeg = jpeg
 
     @property
@@ -62,13 +56,7 @@ def test_window_title_and_metrics(qapp):
     assert window._count_label.text() == "3"
     assert window._backend_label.text() == "stub-backend"
     assert window._fps_label.text() == "12.3"
-    assert window._samples_label.text() == "样本数: 10"
     assert "disabled" in window._publish_label.text()
-
-    expected = {"positive_ratio": 50, "neutral_ratio": 30, "negative_ratio": 20}
-    for key, (name, label, bar) in window._emotion_bars.items():
-        assert label.text() == f"{name} {expected[key]}%"
-        assert bar.value() == expected[key]
 
 
 def test_window_displays_annotated_frame(qapp):

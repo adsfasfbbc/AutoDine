@@ -19,20 +19,6 @@ def test_queue_updated_envelope_validates() -> None:
     validate_envelope(envelope, ENVELOPE_SCHEMA_PATH)
 
 
-def test_experience_summary_envelope_validates() -> None:
-    envelope = build_envelope(
-        event_type="customer.experience_summary",
-        payload={
-            "sample_count": 12,
-            "positive_ratio": 0.5,
-            "neutral_ratio": 0.25,
-            "negative_ratio": 0.25,
-        },
-        **BASE_KWARGS,
-    )
-    validate_envelope(envelope, ENVELOPE_SCHEMA_PATH)
-
-
 def test_envelope_rejects_bad_event_type() -> None:
     from jsonschema import ValidationError
 

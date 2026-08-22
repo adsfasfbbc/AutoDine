@@ -49,7 +49,6 @@ class StubDetector:
 def _make_app(preview_enabled: bool = True):
     config = FrontVisionConfig()
     config.preview_enabled = preview_enabled
-    config.emotion_enabled = False
     config.infer_every_n_frames = 1
     config.core_url = "http://core.test"
     publisher = AdpPublisher(
@@ -59,7 +58,7 @@ def _make_app(preview_enabled: bool = True):
         backoff_seconds=0.0,
         client=httpx.Client(transport=httpx.MockTransport(lambda req: httpx.Response(200, json={}))),
     )
-    pipeline = FrontVisionPipeline(config, publisher, StubCapture(), StubDetector(), None)
+    pipeline = FrontVisionPipeline(config, publisher, StubCapture(), StubDetector())
     app = create_app(config, pipeline=pipeline, capture=pipeline._capture)
     return app, pipeline
 

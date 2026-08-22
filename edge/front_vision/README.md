@@ -1,7 +1,8 @@
 # front_vision (M02)
 
-AutoDine 前厅边缘视觉服务：摄像头采集 → YOLO 人数计数（`queue.updated`）+
-人脸表情识别（`customer.experience_summary`），事件以 ADP v1.0 协议发布到 Core 中台。
+AutoDine 前厅边缘视觉服务：摄像头采集 → YOLO 人数计数（`queue.updated`），
+事件以 ADP v1.0 协议发布到 Core 中台。
+因隐私考虑已移除表情识别，CX 体验指标改由排队/等待时长等非生物特征数据替代。
 
 ## 安装
 
@@ -12,7 +13,7 @@ python -m venv edge/front_vision/.venv
 edge/front_vision/.venv/Scripts/python -m pip install --upgrade pip
 # RTX 50 系（Blackwell sm_120）必须 cu128 构建：
 edge/front_vision/.venv/Scripts/python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
-edge/front_vision/.venv/Scripts/python -m pip install ultralytics onnxruntime hsemotion-onnx \
+edge/front_vision/.venv/Scripts/python -m pip install ultralytics onnxruntime \
     opencv-python fastapi uvicorn httpx pytest jsonschema "pyside6>=6.8,<6.9"
 # 注意：安装 ultralytics 可能把 torch 覆盖成 PyPI 的 CPU 版，务必再执行一次上一行的
 # cu128 安装（pip 会跳过已满足的其余依赖），并用 torch.cuda.is_available() 验证。
@@ -21,13 +22,9 @@ edge/front_vision/.venv/Scripts/python -m pip install -e edge/front_vision --no-
 ```
 
 模型文件放入 `edge/front_vision/models/`（已 gitignore）：
-- `yolo11n.pt` — ultralytics 首次运行时自动下载到当前目录，请移动到 `models/`；
-- `face_detection_yunet_2023mar.onnx` — 从 opencv_zoo 下载；
-- HSEmotion 模型（enet_b2_8）由 `hsemotion-onnx` 首次使用时自动下载到 `~/.hsemotion/`。
+- `yolo11n.pt` — ultralytics 首次运行时自动下载到当前目录，请移动到 `models/`。
 
 已知问题：
-- Windows 下 OpenCV 5.0 的 ONNX 加载器不支持非 ASCII 路径（如中文目录）；代码会自动改用
-  相对路径或将 YuNet 模型复制到 `%PROGRAMDATA%\autodine_front_vision\` 后加载。
 - 发布是异步的：事件进入内存队列由后台线程重试发送（3 次指数退避），Core 宕机不会阻塞推理。
 
 ## 启动
@@ -41,7 +38,7 @@ cd edge/front_vision
 已 `pip install -e` 时可直接运行；否则需先 `PYTHONPATH=src`。
 
 CLI 参数：`--source`、`--camera-index`、`--core-url`、`--store-id`、`--device-id`、
-`--host`、`--port`（默认 5060，启动时检测占用）、`--backend auto|torch`、`--no-emotion`、`--no-preview`、`--log-level`。
+`--host`、`--port`（默认 5060，启动时检测占用）、`--backend auto|torch`、`--no-preview`、`--log-level`。
 
 ## 桌面 GUI 预览（--gui）
 
@@ -55,8 +52,8 @@ cd edge/front_vision
 ```
 
 窗口标题 `AutoDine FrontVision - DEBUG`：左侧为标注后实时画面（与 /preview.mjpeg 同一份内存标注帧，
-QTimer ~30ms 刷新），右侧面板显示当前人数、检测后端、推理 FPS、60 秒表情聚合（样本数 + 三档比例）
-与 Core 发布状态（端点 + dropped 计数）。关闭窗口即退出并释放摄像头。帧只过内存，不落盘。
+QTimer ~30ms 刷新），右侧面板显示当前人数、检测后端、推理 FPS 与 Core 发布状态（端点 + dropped 计数）。
+关闭窗口即退出并释放摄像头。帧只过内存，不落盘。
 
 依赖 PySide6（已加入 pyproject.toml；Windows 上请用 `PySide6>=6.8,<6.9`，6.11.x 的 Qt6Core.dll
 在本机加载失败）。无显示环境下测试用 `QT_QPA_PLATFORM=offscreen`（见 tests/test_gui.py）。
@@ -74,14 +71,10 @@ QTimer ~30ms 刷新），右侧面板显示当前人数、检测后端、推理 
 | `FV_QUEUE_ZONE_ID` | front-queue | 排队区域 ID |
 | `FV_DETECTOR_BACKEND` | auto | `auto`（torch 优先，onnx 兜底）或 `torch` |
 | `FV_PERSON_CONFIDENCE` | 0.4 | YOLO person 置信度阈值 |
-| `FV_FACE_CONFIDENCE` | 0.6 | YuNet 检脸置信度阈值 |
 | `FV_INFER_EVERY_N_FRAMES` | 5 | 每 N 帧做一次推理 |
-| `FV_EMOTION_ENABLED` | true | 是否启用表情识别 |
 | `FV_PREVIEW_ENABLED` | true | 调试预览（/ 页面与 /preview.mjpeg） |
 | `FV_SMOOTH_WINDOW_S` | 3 | 人数滑动窗口（中位数平滑） |
 | `FV_QUEUE_HEARTBEAT_S` | 10 | queue.updated 心跳周期 |
-| `FV_EMOTION_WINDOW_S` | 60 | 表情聚合窗口 |
-| `FV_EMOTION_PUBLISH_S` | 30 | experience_summary 发布周期 |
 | `FV_PORT` | 5060 | HTTP 服务端口 |
 
 排队 ROI 在 `config.py` 的 `queue_roi`（归一化 x/y/w/h），v1 默认全画面。
@@ -89,9 +82,9 @@ QTimer ~30ms 刷新），右侧面板显示当前人数、检测后端、推理 
 ## HTTP 接口
 
 - `GET /health` — 服务与采集状态；
-- `GET /metrics` — 当前人数、推理后端、推理 FPS、窗口内表情聚合等；
+- `GET /metrics` — 当前人数、推理后端、推理 FPS 等；
 - `GET /` — 调试页面（左侧 MJPEG 实时画面 + 右侧指标，每 2s 轮询 /metrics）；
-- `GET /preview.mjpeg` — 标注后的 MJPEG 流（绿框=YOLO person+置信度，蓝框=YuNet 人脸+情绪/情感映射，左上角人数与 FPS）。
+- `GET /preview.mjpeg` — 标注后的 MJPEG 流（绿框=YOLO person+置信度，左上角人数与 FPS）。
 
 ## 调试预览（隐私注意）
 
@@ -103,15 +96,12 @@ QTimer ~30ms 刷新），右侧面板显示当前人数、检测后端、推理 
 | event_type | severity | payload | 触发 |
 |---|---|---|---|
 | `queue.updated` | info | `{zone_id, waiting_count}`（estimated_wait_seconds 暂缺省） | 人数变化或每 10s 心跳 |
-| `customer.experience_summary` | info | `{sample_count, positive_ratio, neutral_ratio, negative_ratio}` | 每 30s，60s 滑窗；无样本时跳过 |
 
-人数经 3 秒滑动窗口中位数平滑。表情 8 类映射：
-happiness/surprise → positive；anger/disgust/fear/sadness → negative；neutral/contempt → neutral。
+人数经 3 秒滑动窗口中位数平滑。
 
 ## 隐私说明
 
-所有人脸裁剪与视频帧仅在内存中处理，**绝不落盘**；发布到 Core 的只有计数与比例等聚合统计，
-不包含任何图像或原始人脸特征。
+所有视频帧仅在内存中处理，**绝不落盘**；发布到 Core 的只有计数等聚合统计，不包含任何图像。
 
 ## 测试与冒烟
 

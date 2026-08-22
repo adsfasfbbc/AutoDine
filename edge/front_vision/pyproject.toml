@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "front-vision"
 version = "0.1.0"
-description = "AutoDine M02 front-of-house edge vision service (people counting + emotion recognition)"
+description = "AutoDine M02 front-of-house edge vision service (people counting)"
 requires-python = ">=3.13"
 
 dependencies = [

@@ -20,7 +20,6 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--host", default=None)
     parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--backend", default=None, choices=["auto", "torch"], help="person-detection backend")
-    parser.add_argument("--no-emotion", action="store_true", help="disable face emotion recognition")
     parser.add_argument("--no-preview", action="store_true", help="disable the MJPEG debug preview (production)")
     parser.add_argument("--gui", action="store_true", help="run the PySide6 desktop debug window instead of the FastAPI service")
     parser.add_argument("--no-publish", action="store_true", help="skip ADP event publishing (local demo, GUI mode)")
@@ -46,8 +45,6 @@ def config_from_args(args: argparse.Namespace) -> FrontVisionConfig:
         config.port = args.port
     if args.backend is not None:
         config.detector_backend = args.backend
-    if args.no_emotion:
-        config.emotion_enabled = False
     if args.no_preview:
         config.preview_enabled = False
     return config
