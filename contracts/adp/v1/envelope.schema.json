@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://autodine.local/contracts/adp/v1/envelope.schema.json",
   "title": "AutoDine ADP v1 Envelope",
-  "description": "Shared event envelope for AutoDine v1 modules. Event type namespaces include vision.storage.*, vision.front.*, inventory.*, quality.*, menu.*, order.*, production.*, device.*, robot.*, alarm.*, and queue.*.",
+  "description": "Shared event envelope for AutoDine v1 modules. Event type namespaces include vision.storage.*, vision.front.*, inventory.*, quality.*, menu.*, order.*, production.*, device.*, robot.*, alarm.*, queue.*, and customer.*.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -67,8 +67,8 @@
     },
     "event_type": {
       "type": "string",
-      "description": "snake_case event names under frozen v1 namespaces: vision.storage.*, vision.front.*, inventory.*, quality.*, menu.*, order.*, production.*, device.*, robot.*, alarm.*, queue.*",
-      "pattern": "^(vision\\.storage|vision\\.front|inventory|quality|menu|order|production|device|robot|alarm|queue)\\.[a-z0-9]+(?:_[a-z0-9]+)*(?:\\.[a-z0-9]+(?:_[a-z0-9]+)*)*$"
+      "description": "snake_case event names under frozen v1 namespaces: vision.storage.*, vision.front.*, inventory.*, quality.*, menu.*, order.*, production.*, device.*, robot.*, alarm.*, queue.*, customer.*",
+      "pattern": "^(vision\\.storage|vision\\.front|inventory|quality|menu|order|production|device|robot|alarm|queue|customer)\\.[a-z0-9]+(?:_[a-z0-9]+)*(?:\\.[a-z0-9]+(?:_[a-z0-9]+)*)*$"
     },
     "severity": {
       "type": "string",

@@ -22,6 +22,9 @@ channels:
   production.task_ready: {address: production.task_ready}
   production.task_completed: {address: production.task_completed}
   queue.updated: {address: queue.updated}
+  # vision.front.experience stays reserved for raw edge frames; Core consumes
+  # the aggregated, anonymous customer.experience_summary relayed below.
+  customer.experience_summary: {address: customer.experience_summary}
   device.command: {address: device.command}
   device.command_result: {address: device.command_result}
   robot.status: {address: robot.status}
