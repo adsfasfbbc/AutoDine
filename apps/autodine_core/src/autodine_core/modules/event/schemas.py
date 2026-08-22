@@ -65,17 +65,6 @@ class QueueUpdatedPayloadSchema(BaseModel):
     estimated_wait_seconds: Optional[int] = Field(default=None, ge=0)
 
 
-class CustomerExperienceSummaryPayloadSchema(BaseModel):
-    """Anonymous aggregate expression ratios from front vision; no face data."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    sample_count: int = Field(ge=0)
-    positive_ratio: float = Field(ge=0.0, le=1.0)
-    neutral_ratio: float = Field(ge=0.0, le=1.0)
-    negative_ratio: float = Field(ge=0.0, le=1.0)
-
-
 class DeviceCommandResultPayloadSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -92,7 +81,7 @@ class AdpEventEnvelopeSchema(BaseModel):
     event_id: str = Field(min_length=1, pattern=r"^[a-z0-9][a-z0-9_-]*$")
     trace_id: str = Field(min_length=1, pattern=r"^[a-z0-9][a-z0-9_-]*$")
     event_type: str = Field(
-        pattern=r"^(vision\.storage|vision\.front|inventory|quality|menu|order|production|device|robot|alarm|queue|customer)\.[a-z0-9]+(?:_[a-z0-9]+)*(?:\.[a-z0-9]+(?:_[a-z0-9]+)*)*$"
+        pattern=r"^(vision\.storage|vision\.front|inventory|quality|menu|order|production|device|robot|alarm|queue)\.[a-z0-9]+(?:_[a-z0-9]+)*(?:\.[a-z0-9]+(?:_[a-z0-9]+)*)*$"
     )
     severity: str = Field(pattern=r"^(debug|info|warning|error|critical)$")
     timestamp: datetime
@@ -126,8 +115,6 @@ class AdpEventEnvelopeSchema(BaseModel):
             return QualityAbnormalPayloadSchema.model_validate(value).model_dump(exclude_none=True)
         if event_type == "queue.updated":
             return QueueUpdatedPayloadSchema.model_validate(value).model_dump(exclude_none=True)
-        if event_type == "customer.experience_summary":
-            return CustomerExperienceSummaryPayloadSchema.model_validate(value).model_dump()
         if event_type == "device.command_result":
             return DeviceCommandResultPayloadSchema.model_validate(value).model_dump()
         return value

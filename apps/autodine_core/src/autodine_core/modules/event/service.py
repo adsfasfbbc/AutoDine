@@ -340,22 +340,6 @@ def process_event(session: Session, envelope: AdpEventEnvelopeSchema) -> Dict[st
             session.commit()
             return {"status": "processed", "event_id": envelope.event_id}
 
-        if envelope.event_type == "customer.experience_summary":
-            # Anonymous aggregate from front vision. No table: the payload is
-            # relayed verbatim through the outbox/websocket fan-out for live
-            # consumers; persistence is left to a future Analytics iteration.
-            session.add(_build_inbox_record(envelope, status=EventInboxStatus.PROCESSED))
-            _append_outbox(
-                session,
-                trace_id=envelope.trace_id or envelope.event_id,
-                store_id=envelope.store_id,
-                event_type="customer.experience_summary",
-                severity=envelope.severity,
-                payload=jsonable_encoder(envelope.payload),
-            )
-            session.commit()
-            return {"status": "processed", "event_id": envelope.event_id}
-
         session.add(_build_inbox_record(envelope, status=EventInboxStatus.IGNORED))
         session.commit()
         return {

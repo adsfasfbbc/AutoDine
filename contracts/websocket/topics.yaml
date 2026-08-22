@@ -17,7 +17,6 @@ topics:
   - production.task_ready
   - production.task_completed
   - queue.updated
-  - customer.experience_summary
   - device.command
   - device.command_result
   - quality.abnormal
