@@ -113,8 +113,8 @@ class EmotionAnalyzer:
                 boxes.append((x, y, fw, fh))
         return boxes
 
-    def classify(self, frame: np.ndarray, box: FaceBox) -> Optional[str]:
-        """Return the sentiment bucket (positive/neutral/negative) for one face crop."""
+    def classify_detailed(self, frame: np.ndarray, box: FaceBox) -> Optional[Tuple[str, str]]:
+        """Return (raw_emotion_label, sentiment) for one face crop."""
         x, y, w, h = box
         crop = frame[y:y + h, x:x + w]
         if crop.size == 0:
@@ -124,7 +124,22 @@ class EmotionAnalyzer:
         except Exception:
             logger.exception("emotion classification failed")
             return None
-        return sentiment_for_emotion(str(emotion))
+        emotion = str(emotion)
+        return emotion, sentiment_for_emotion(emotion)
+
+    def classify(self, frame: np.ndarray, box: FaceBox) -> Optional[str]:
+        """Return the sentiment bucket (positive/neutral/negative) for one face crop."""
+        result = self.classify_detailed(frame, box)
+        return result[1] if result else None
+
+    def analyze_detailed(self, frame: np.ndarray) -> List[Tuple[FaceBox, str, str]]:
+        """Detect faces; return (face_box, raw_emotion_label, sentiment) per face."""
+        out: List[Tuple[FaceBox, str, str]] = []
+        for box in self.detect_faces(frame):
+            result = self.classify_detailed(frame, box)
+            if result:
+                out.append((box, result[0], result[1]))
+        return out
 
     def analyze(self, frame: np.ndarray) -> List[str]:
         """Detect all faces in the frame and return one sentiment per face."""

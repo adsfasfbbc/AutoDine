@@ -13,7 +13,7 @@ edge/front_vision/.venv/Scripts/python -m pip install --upgrade pip
 # RTX 50 系（Blackwell sm_120）必须 cu128 构建：
 edge/front_vision/.venv/Scripts/python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 edge/front_vision/.venv/Scripts/python -m pip install ultralytics onnxruntime hsemotion-onnx \
-    opencv-python fastapi uvicorn httpx pytest jsonschema
+    opencv-python fastapi uvicorn httpx pytest jsonschema "pyside6>=6.8,<6.9"
 # 注意：安装 ultralytics 可能把 torch 覆盖成 PyPI 的 CPU 版，务必再执行一次上一行的
 # cu128 安装（pip 会跳过已满足的其余依赖），并用 torch.cuda.is_available() 验证。
 # 以可编辑方式安装本包，使 python -m front_vision 可直接使用：
@@ -41,7 +41,25 @@ cd edge/front_vision
 已 `pip install -e` 时可直接运行；否则需先 `PYTHONPATH=src`。
 
 CLI 参数：`--source`、`--camera-index`、`--core-url`、`--store-id`、`--device-id`、
-`--host`、`--port`（默认 5060，启动时检测占用）、`--backend auto|torch`、`--no-emotion`、`--log-level`。
+`--host`、`--port`（默认 5060，启动时检测占用）、`--backend auto|torch`、`--no-emotion`、`--no-preview`、`--log-level`。
+
+## 桌面 GUI 预览（--gui）
+
+原生桌面调试窗口（PySide6），与网页预览互不影响——`--gui` 模式下**不启动 FastAPI**，只跑
+采集 + 推理 + 事件发布 + 桌面窗口（Qt 事件循环在主线程，推理仍在后台线程）：
+
+```bash
+cd edge/front_vision
+.venv/Scripts/python -m front_vision --source camera --gui               # 摄像头 + GUI
+.venv/Scripts/python -m front_vision --source camera --gui --no-publish  # 纯本地演示，不发 ADP 事件
+```
+
+窗口标题 `AutoDine FrontVision - DEBUG`：左侧为标注后实时画面（与 /preview.mjpeg 同一份内存标注帧，
+QTimer ~30ms 刷新），右侧面板显示当前人数、检测后端、推理 FPS、60 秒表情聚合（样本数 + 三档比例）
+与 Core 发布状态（端点 + dropped 计数）。关闭窗口即退出并释放摄像头。帧只过内存，不落盘。
+
+依赖 PySide6（已加入 pyproject.toml；Windows 上请用 `PySide6>=6.8,<6.9`，6.11.x 的 Qt6Core.dll
+在本机加载失败）。无显示环境下测试用 `QT_QPA_PLATFORM=offscreen`（见 tests/test_gui.py）。
 
 ## 配置项（环境变量，前缀 `FV_`）
 
@@ -59,6 +77,7 @@ CLI 参数：`--source`、`--camera-index`、`--core-url`、`--store-id`、`--de
 | `FV_FACE_CONFIDENCE` | 0.6 | YuNet 检脸置信度阈值 |
 | `FV_INFER_EVERY_N_FRAMES` | 5 | 每 N 帧做一次推理 |
 | `FV_EMOTION_ENABLED` | true | 是否启用表情识别 |
+| `FV_PREVIEW_ENABLED` | true | 调试预览（/ 页面与 /preview.mjpeg） |
 | `FV_SMOOTH_WINDOW_S` | 3 | 人数滑动窗口（中位数平滑） |
 | `FV_QUEUE_HEARTBEAT_S` | 10 | queue.updated 心跳周期 |
 | `FV_EMOTION_WINDOW_S` | 60 | 表情聚合窗口 |
@@ -70,7 +89,14 @@ CLI 参数：`--source`、`--camera-index`、`--core-url`、`--store-id`、`--de
 ## HTTP 接口
 
 - `GET /health` — 服务与采集状态；
-- `GET /metrics` — 当前人数、推理后端、窗口内表情聚合等。
+- `GET /metrics` — 当前人数、推理后端、推理 FPS、窗口内表情聚合等；
+- `GET /` — 调试页面（左侧 MJPEG 实时画面 + 右侧指标，每 2s 轮询 /metrics）；
+- `GET /preview.mjpeg` — 标注后的 MJPEG 流（绿框=YOLO person+置信度，蓝框=YuNet 人脸+情绪/情感映射，左上角人数与 FPS）。
+
+## 调试预览（隐私注意）
+
+预览**默认开启**，便于本机演示；帧仅在内存中保留最新一份，JPEG 也只存在于内存，不落盘。
+生产环境或非本机演示机请用 `--no-preview`（或 `FV_PREVIEW_ENABLED=false`）关闭，关闭后推理循环零预览开销。
 
 ## 发布事件（ADP v1.0，POST {core}/api/v1/events）
 

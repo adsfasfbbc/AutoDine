@@ -21,6 +21,9 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--backend", default=None, choices=["auto", "torch"], help="person-detection backend")
     parser.add_argument("--no-emotion", action="store_true", help="disable face emotion recognition")
+    parser.add_argument("--no-preview", action="store_true", help="disable the MJPEG debug preview (production)")
+    parser.add_argument("--gui", action="store_true", help="run the PySide6 desktop debug window instead of the FastAPI service")
+    parser.add_argument("--no-publish", action="store_true", help="skip ADP event publishing (local demo, GUI mode)")
     parser.add_argument("--log-level", default="INFO")
     return parser.parse_args(argv)
 
@@ -45,6 +48,8 @@ def config_from_args(args: argparse.Namespace) -> FrontVisionConfig:
         config.detector_backend = args.backend
     if args.no_emotion:
         config.emotion_enabled = False
+    if args.no_preview:
+        config.preview_enabled = False
     return config
 
 
@@ -55,6 +60,13 @@ def main(argv=None) -> int:
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
     config = config_from_args(args)
+
+    if args.gui:
+        # GUI mode: no FastAPI/uvicorn; Qt must run on the main thread while
+        # capture + inference stay on background threads.
+        from .gui import run_gui
+
+        return run_gui(config, publish=not args.no_publish)
 
     if not is_port_free(config.host, config.port):
         print(f"error: port {config.port} on {config.host} is already in use", file=sys.stderr)

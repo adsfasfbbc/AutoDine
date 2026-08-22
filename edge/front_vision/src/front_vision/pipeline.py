@@ -51,6 +51,12 @@ class FrontVisionPipeline:
         self._last_queue_publish = 0.0
         self._last_emotion_publish = time.monotonic()
 
+        # MJPEG debug preview: only the newest annotated JPEG, in memory.
+        self._preview_jpeg: Optional[bytes] = None
+        self._preview_lock = threading.Lock()
+        self.inference_fps = 0.0
+        self._last_infer_mono: Optional[float] = None
+
     # -- lifecycle ---------------------------------------------------------
     def start(self) -> None:
         self._stop.clear()
@@ -118,9 +124,15 @@ class FrontVisionPipeline:
         with self._lock:
             self.last_frame_at = time.time()
             self.frames_inferred += 1
+        if self._last_infer_mono is not None:
+            dt = now - self._last_infer_mono
+            if dt > 0:
+                self.inference_fps = 0.9 * self.inference_fps + 0.1 * (1.0 / dt)
+        self._last_infer_mono = now
 
         # --- people counting ------------------------------------------------
-        boxes = self._detector.detect(frame)
+        detections = self._detector.detect_with_scores(frame)
+        boxes = [b for b, _ in detections]
         frame_size = (frame.shape[1], frame.shape[0])
         raw_count = count_in_roi(boxes, cfg.queue_roi, frame_size)
         smoothed = self._smoother.add(raw_count)
@@ -133,10 +145,47 @@ class FrontVisionPipeline:
             self.publish_queue_update(smoothed)
 
         # --- emotion recognition -------------------------------------------
+        face_results = []
         if self._emotion_analyzer is not None:
-            for sentiment in self._emotion_analyzer.analyze(frame):
+            face_results = self._emotion_analyzer.analyze_detailed(frame)
+            for _, _, sentiment in face_results:
                 self._aggregator.add(sentiment)
 
         if (now - self._last_emotion_publish) >= cfg.emotion_publish_seconds:
             self._last_emotion_publish = now
             self.publish_emotion_summary()
+
+        # --- debug preview frame (memory-only, zero cost when disabled) -----
+        if cfg.preview_enabled:
+            self._annotate_and_store(frame, detections, face_results, smoothed)
+
+    def _annotate_and_store(self, frame, detections, face_results, smoothed_count: int) -> None:
+        """Draw boxes/labels on a copy of the frame and keep only the newest JPEG."""
+        import cv2
+
+        annotated = frame.copy()
+        for (x1, y1, x2, y2), score in detections:
+            cv2.rectangle(annotated, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+            cv2.putText(
+                annotated, f"person {score:.2f}", (int(x1), max(15, int(y1) - 6)),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1,
+            )
+        for (fx, fy, fw, fh), emotion, sentiment in face_results:
+            cv2.rectangle(annotated, (fx, fy), (fx + fw, fy + fh), (255, 0, 0), 2)
+            cv2.putText(
+                annotated, f"{emotion}/{sentiment}", (fx, max(15, fy - 6)),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1,
+            )
+        cv2.putText(
+            annotated, f"count={smoothed_count} fps={self.inference_fps:.1f}", (8, 24),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2,
+        )
+        ok, buf = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        if ok:
+            with self._preview_lock:
+                self._preview_jpeg = buf.tobytes()
+
+    def preview_jpeg(self) -> Optional[bytes]:
+        """Newest annotated frame as JPEG bytes (None until first inference)."""
+        with self._preview_lock:
+            return self._preview_jpeg

@@ -1,0 +1,94 @@
+"""Offscreen tests for the PySide6 debug window (no display required)."""
+import os
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+import threading
+
+import pytest
+
+pytest.importorskip("PySide6")
+
+from PySide6.QtWidgets import QApplication
+
+from front_vision.gui import WINDOW_TITLE, FrontVisionWindow, NullPublisher
+
+
+@pytest.fixture(scope="module")
+def qapp():
+    app = QApplication.instance() or QApplication([])
+    yield app
+
+
+class _StubPipeline:
+    """Minimal stand-in for FrontVisionPipeline (no capture/inference)."""
+
+    def __init__(self, jpeg: bytes | None = None):
+        self._lock = threading.Lock()
+        self.current_count = 3
+        self.inference_fps = 12.34
+        self.last_emotion_summary = {
+            "sample_count": 10,
+            "positive_ratio": 0.5,
+            "neutral_ratio": 0.3,
+            "negative_ratio": 0.2,
+        }
+        self._jpeg = jpeg
+
+    @property
+    def backend_name(self) -> str:
+        return "stub-backend"
+
+    def preview_jpeg(self):
+        return self._jpeg
+
+
+def _make_jpeg() -> bytes:
+    import cv2
+    import numpy as np
+
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    cv2.putText(frame, "count=3", (8, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+    ok, buf = cv2.imencode(".jpg", frame)
+    assert ok
+    return buf.tobytes()
+
+
+def test_window_title_and_metrics(qapp):
+    window = FrontVisionWindow(_StubPipeline(), publisher=NullPublisher())
+    assert window.windowTitle() == WINDOW_TITLE
+
+    window.refresh()
+    assert window._count_label.text() == "3"
+    assert window._backend_label.text() == "stub-backend"
+    assert window._fps_label.text() == "12.3"
+    assert window._samples_label.text() == "样本数: 10"
+    assert "disabled" in window._publish_label.text()
+
+    expected = {"positive_ratio": 50, "neutral_ratio": 30, "negative_ratio": 20}
+    for key, (name, label, bar) in window._emotion_bars.items():
+        assert label.text() == f"{name} {expected[key]}%"
+        assert bar.value() == expected[key]
+
+
+def test_window_displays_annotated_frame(qapp):
+    window = FrontVisionWindow(_StubPipeline(jpeg=_make_jpeg()))
+    assert window._video_label.pixmap().isNull()
+    window.refresh()
+    assert not window._video_label.pixmap().isNull()
+
+
+def test_window_without_frame_keeps_placeholder(qapp):
+    window = FrontVisionWindow(_StubPipeline(jpeg=None))
+    window.refresh()
+    assert window._video_label.pixmap().isNull()
+    assert window._video_label.text() == "waiting for frames..."
+
+
+def test_null_publisher_is_a_noop():
+    publisher = NullPublisher()
+    publisher.start_worker()
+    publisher.enqueue(event_type="queue.updated", payload={})
+    publisher.close()
+    assert publisher.dropped_events == 0
+    assert "disabled" in publisher.endpoint

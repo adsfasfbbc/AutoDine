@@ -60,6 +60,8 @@ class FrontVisionConfig:
     # Run heavy inference every Nth captured frame to keep CPU/GPU load sane.
     infer_every_n_frames: int = field(default_factory=lambda: _int_env("FV_INFER_EVERY_N_FRAMES", 5))
     emotion_enabled: bool = field(default_factory=lambda: _bool_env("FV_EMOTION_ENABLED", True))
+    # In-browser MJPEG debug preview (annotated frames, memory-only).
+    preview_enabled: bool = field(default_factory=lambda: _bool_env("FV_PREVIEW_ENABLED", True))
 
     # Queue counting
     # ROI as normalized (x, y, w, h); v1 default covers the full frame.

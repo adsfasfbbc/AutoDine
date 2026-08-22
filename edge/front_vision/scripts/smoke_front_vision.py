@@ -54,13 +54,19 @@ class FakeDetector:
 
     backend_name = "fake"
 
+    def detect_with_scores(self, frame):
+        return [((100.0, 100.0, 220.0, 460.0), 0.95)]
+
     def detect(self, frame):
-        return [(100.0, 100.0, 220.0, 460.0)]
+        return [b for b, _ in self.detect_with_scores(frame)]
 
 
 class FakeEmotionAnalyzer:
     def analyze(self, frame):
         return ["positive"]
+
+    def analyze_detailed(self, frame):
+        return [((260, 140, 80, 90), "Happiness", "positive")]
 
 
 def run() -> int:

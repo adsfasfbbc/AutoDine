@@ -77,16 +77,21 @@ class _TorchBackend:
         logger.info("torch backend ready (device=%s, model=%s)", self._device, model_path)
 
     def detect(self, frame: np.ndarray, confidence: float) -> List[Box]:
+        return [b for b, _ in self.detect_with_scores(frame, confidence)]
+
+    def detect_with_scores(self, frame: np.ndarray, confidence: float) -> List[Tuple[Box, float]]:
         results = self._model.predict(
             frame, classes=[PERSON_CLASS_ID], conf=confidence, verbose=False, device=self._device
         )
-        boxes: List[Box] = []
+        out: List[Tuple[Box, float]] = []
         for r in results:
             if r.boxes is None:
                 continue
-            for b in r.boxes.xyxy.cpu().numpy():
-                boxes.append((float(b[0]), float(b[1]), float(b[2]), float(b[3])))
-        return boxes
+            xyxy = r.boxes.xyxy.cpu().numpy()
+            confs = r.boxes.conf.cpu().numpy()
+            for b, c in zip(xyxy, confs):
+                out.append(((float(b[0]), float(b[1]), float(b[2]), float(b[3])), float(c)))
+        return out
 
 
 class _OnnxBackend:
@@ -107,6 +112,9 @@ class _OnnxBackend:
         logger.info("onnxruntime backend ready (%s, providers=%s)", onnx_path, self._session.get_providers())
 
     def detect(self, frame: np.ndarray, confidence: float) -> List[Box]:
+        return [b for b, _ in self.detect_with_scores(frame, confidence)]
+
+    def detect_with_scores(self, frame: np.ndarray, confidence: float) -> List[Tuple[Box, float]]:
         import cv2
 
         img, scale, pad_x, pad_y = _letterbox(frame)
@@ -123,13 +131,13 @@ class _OnnxBackend:
         boxes = np.stack([cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2], axis=1)
         scores = person_scores[mask]
         keep = _nms(boxes, scores)
-        result: List[Box] = []
+        result: List[Tuple[Box, float]] = []
         for i in keep:
             x1 = (boxes[i, 0] - pad_x) / scale
             y1 = (boxes[i, 1] - pad_y) / scale
             x2 = (boxes[i, 2] - pad_x) / scale
             y2 = (boxes[i, 3] - pad_y) / scale
-            result.append((float(x1), float(y1), float(x2), float(y2)))
+            result.append(((float(x1), float(y1), float(x2), float(y2)), float(scores[i])))
         return result
 
 
@@ -169,6 +177,9 @@ class PersonDetector:
 
     def detect(self, frame: np.ndarray) -> List[Box]:
         return self._backend.detect(frame, self.confidence)
+
+    def detect_with_scores(self, frame: np.ndarray) -> List[Tuple[Box, float]]:
+        return self._backend.detect_with_scores(frame, self.confidence)
 
 
 def box_center_in_roi(box: Box, roi: Tuple[float, float, float, float], frame_size: Tuple[int, int]) -> bool:
