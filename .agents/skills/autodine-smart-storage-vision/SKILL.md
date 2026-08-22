@@ -19,6 +19,7 @@ Keep module A independently runnable and compatible with the current AutoDine mo
 - Use CountGD++ as the preferred open-world counting research backend. Keep the backend replaceable because its 1.25 GB checkpoint, CUDA extensions, and Linux build are not a reliable default on every workstation or Jetson.
 - Use a lightweight trained detector/classifier (normally YOLO) for deterministic defect screening. Use VLM only to review low-confidence or conflicting cases; do not make network VLM access a hard dependency of counting.
 - Keep the deterministic Mock backend working without GPU, camera, model weights, or network. Never claim the real model was trained or validated when only Mock tests ran.
+- Whenever Mock input, Mock inference, simulated hardware, placeholder adapters, or hard-coded fixtures are used, say so plainly and prominently; never conceal, soften, or imply that they are real model or hardware results.
 - Convert object counts to inventory units only through explicit per-ingredient calibration. Do not infer grams or millilitres directly from a bounding-box count.
 - A owns RTSP/frame ingestion, visual inference, zone tracking, observations, and A-side ADP publication. Core owns business inventory/reservations/BOM/menu state. HardwareHub owns device control. DineWeb owns final UI.
 - Emit exact snake_case ADP envelopes with UTC/ISO 8601 timestamps, idempotent event IDs, trace IDs, store/device identity, and only payload fields accepted by Core.
@@ -29,4 +30,5 @@ Keep module A independently runnable and compatible with the current AutoDine mo
 
 - Run A unit tests and the generated-event/Core integration test. Run the repository suite when shared contracts or root configuration change.
 - Report separately what was verified with Mock, local model inference, RTSP hardware, Jetson, and Core.
+- Every delivery to the user must explicitly state: what was completed; what was not completed; why each missing item was not completed; what should be done next; and concrete instructions for how to do the next step.
 - After tests pass, commit and push only when authorized. Before pushing, re-check `origin`, branch, diff, and upstream changes; never force-push.
