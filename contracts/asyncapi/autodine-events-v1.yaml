@@ -11,6 +11,7 @@ channels:
   vision.storage.detected: {address: vision.storage.detected}
   vision.front.queue: {address: vision.front.queue}
   vision.front.safety: {address: vision.front.safety}
+  vision.front.fire: {address: vision.front.fire}
   inventory.detected: {address: inventory.detected}
   quality.abnormal: {address: quality.abnormal}
   inventory.changed: {address: inventory.changed}
