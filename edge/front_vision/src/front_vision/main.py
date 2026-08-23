@@ -23,6 +23,11 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--no-preview", action="store_true", help="disable the MJPEG debug preview (production)")
     parser.add_argument("--no-audio", action="store_true", help="disable the acoustic safety channel (vision-only; fusion never publishes)")
     parser.add_argument("--simulate-safety", action="store_true", help="inject synthetic dual-modality safety cues (demo without real people)")
+    parser.add_argument("--no-fire", action="store_true", help="disable fire detection entirely")
+    parser.add_argument("--no-fire-sensor", action="store_true", help="disable the Modbus flame-sensor channel (vision-only; fusion never publishes)")
+    parser.add_argument("--fire-port", default=None, help="flame sensor serial port (default: COM3 on Windows, /dev/ttyUSB0 on Linux)")
+    parser.add_argument("--fire-model", default=None, help="path to the flame detection model (fire.pt)")
+    parser.add_argument("--simulate-fire", action="store_true", help="inject synthetic dual-channel fire cues (demo without a real fire)")
     parser.add_argument("--gui", action="store_true", help="run the PySide6 desktop debug window instead of the FastAPI service")
     parser.add_argument("--no-publish", action="store_true", help="skip ADP event publishing (local demo, GUI mode)")
     parser.add_argument("--log-level", default="INFO")
@@ -53,6 +58,16 @@ def config_from_args(args: argparse.Namespace) -> FrontVisionConfig:
         config.audio_enabled = False
     if args.simulate_safety:
         config.simulate_safety = True
+    if args.no_fire:
+        config.fire_enabled = False
+    if args.no_fire_sensor:
+        config.fire_sensor_enabled = False
+    if args.fire_port is not None:
+        config.fire_sensor_port = args.fire_port
+    if args.fire_model is not None:
+        config.fire_model_path = args.fire_model
+    if args.simulate_fire:
+        config.simulate_fire = True
     return config
 
 

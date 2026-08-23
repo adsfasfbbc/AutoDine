@@ -102,6 +102,33 @@ class FrontVisionConfig:
     # Inject a deterministic dual-modality pattern for demos (--simulate-safety).
     simulate_safety: bool = False
 
+    # Fire detection (YOLO flame vision + Modbus flame sensor fusion).
+    # A vision.front.fire event is published only when BOTH channels fire
+    # within a ±3s window; single-channel cues are debug-logged only.
+    fire_enabled: bool = field(default_factory=lambda: _bool_env("FV_FIRE_ENABLED", True))
+    fire_zone_id: str = field(default_factory=lambda: os.getenv("FV_FIRE_ZONE_ID", "front-hall"))
+    fire_model_path: str = field(
+        default_factory=lambda: os.getenv("FV_FIRE_MODEL_PATH", str(MODELS_DIR / "fire.pt"))
+    )
+    fire_confidence: float = field(default_factory=lambda: _float_env("FV_FIRE_CONFIDENCE", 0.25))
+    # Flame inference is throttled again on top of FV_INFER_EVERY_N_FRAMES:
+    # the model runs on every Nth pipeline inference frame.
+    fire_infer_every_n_frames: int = field(default_factory=lambda: _int_env("FV_FIRE_INFER_EVERY_N_FRAMES", 5))
+    # Modbus flame sensor channel (pyserial); a port that fails to open only
+    # disables this channel ("sensor never fires"), never crashes the service.
+    fire_sensor_enabled: bool = field(default_factory=lambda: _bool_env("FV_FIRE_SENSOR_ENABLED", True))
+    # Empty = platform default (COM3 on Windows, /dev/ttyUSB0 on Linux).
+    fire_sensor_port: str = field(default_factory=lambda: os.getenv("FV_FIRE_SENSOR_PORT", ""))
+    fire_sensor_baudrate: int = field(default_factory=lambda: _int_env("FV_FIRE_SENSOR_BAUDRATE", 9600))
+    fire_sensor_poll_seconds: float = field(default_factory=lambda: _float_env("FV_FIRE_SENSOR_POLL_S", 0.1))
+    fire_sensor_timeout_seconds: float = field(default_factory=lambda: _float_env("FV_FIRE_SENSOR_TIMEOUT_S", 0.5))
+    # Fusion timing.
+    fire_fusion_window_seconds: float = field(default_factory=lambda: _float_env("FV_FIRE_FUSION_WINDOW_S", 3.0))
+    fire_cooldown_seconds: float = field(default_factory=lambda: _float_env("FV_FIRE_COOLDOWN_S", 30.0))
+    fire_critical_after_seconds: float = field(default_factory=lambda: _float_env("FV_FIRE_CRITICAL_AFTER_S", 10.0))
+    # Inject a deterministic dual-channel pattern for demos (--simulate-fire).
+    simulate_fire: bool = False
+
 
 def is_port_free(host: str, port: int) -> bool:
     """Return True if nothing is listening on host:port (IPv4)."""
