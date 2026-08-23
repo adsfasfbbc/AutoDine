@@ -22,3 +22,11 @@ Thumbs.db
 
 # M02 front_vision edge service
 edge/front_vision/models/
+
+# SmartStorageVision local data, weights, and generated runtime state
+edge/smart_storage_vision/output/
+edge/smart_storage_vision/data/raw/
+edge/smart_storage_vision/checkpoints/
+*.pt
+*.pth
+*.engine

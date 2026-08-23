@@ -1,0 +1,13 @@
+{
+  "scene_id": "storage-demo-001",
+  "detections": [
+    {"ingredient_id": "lemon", "location_id": "bar", "confidence": 0.97, "quality_status": "good", "quality_confidence": 0.96, "bbox_xyxy": [20, 30, 100, 120]},
+    {"ingredient_id": "lemon", "location_id": "bar", "confidence": 0.94, "quality_status": "good", "quality_confidence": 0.93, "bbox_xyxy": [110, 32, 190, 121]},
+    {"ingredient_id": "lemon", "location_id": "bar", "confidence": 0.91, "quality_status": "defective", "quality_confidence": 0.89, "bbox_xyxy": [200, 35, 282, 125]},
+    {"ingredient_id": "lemon", "location_id": "bar", "confidence": 0.88, "quality_status": "review", "quality_confidence": 0.58, "bbox_xyxy": [290, 36, 371, 126]},
+    {"ingredient_id": "tomato", "location_id": "bar", "confidence": 0.96, "quality_status": "good", "quality_confidence": 0.95, "bbox_xyxy": [30, 160, 112, 248]},
+    {"ingredient_id": "tomato", "location_id": "bar", "confidence": 0.93, "quality_status": "good", "quality_confidence": 0.91, "bbox_xyxy": [123, 162, 205, 250]},
+    {"ingredient_id": "tomato", "location_id": "bar", "confidence": 0.90, "quality_status": "good", "quality_confidence": 0.90, "bbox_xyxy": [217, 165, 298, 252]}
+  ]
+}
+

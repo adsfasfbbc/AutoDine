@@ -1,0 +1,26 @@
+version: 1
+datasets:
+  - id: omnicount_191_fruits
+    purpose: countgd_plus_plus_counting_evaluation
+    source: https://huggingface.co/datasets/cvssp/OmniCount-191
+    license: OpenRAIL++
+    size: 1.48 GB
+    status: selected_not_downloaded
+  - id: fruit_16k
+    purpose: spoiled_fresh_crop_classifier_pretraining
+    source: https://data.mendeley.com/datasets/6ps7gtp2wg/1
+    doi: 10.17632/6ps7gtp2wg.1
+    license: CC BY 4.0
+    images: 16000
+    classes: [banana, lemon, lulo, mango, orange, strawberry, tamarillo, tomato]
+    status: selected_not_downloaded
+  - id: autodine_local_storage_v1
+    purpose: camera_domain_validation_and_final_acceptance
+    source: team_capture
+    license: team_owned
+    status: required_not_collected
+notes:
+  - Keep all image archives and checkpoints outside Git.
+  - Record immutable download hashes and split manifests before training.
+  - Do not mix images from the same capture burst across train and test splits.
+

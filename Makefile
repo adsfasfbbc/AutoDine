@@ -1,4 +1,4 @@
-.PHONY: install test migrate seed run mock-replay smoke
+.PHONY: install test migrate seed run mock-replay smoke vision-demo vision-test
 
 PYTHON ?= python
 DATABASE_URL ?= sqlite+pysqlite:///autodine.db
@@ -25,3 +25,9 @@ mock-replay:
 
 smoke:
 	$(PYTHON) scripts/smoke_test.py
+
+vision-demo:
+	$(PYTHON) edge/smart_storage_vision/run_demo.py
+
+vision-test:
+	$(PYTHON) -m pytest -q edge/smart_storage_vision/tests

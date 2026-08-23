@@ -30,4 +30,4 @@ package-dir = {"" = "apps/autodine_core/src"}
 where = ["apps/autodine_core/src"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "apps/autodine_core/tests"]
+testpaths = ["tests", "apps/autodine_core/tests", "edge/smart_storage_vision/tests"]

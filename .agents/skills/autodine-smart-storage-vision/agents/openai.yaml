@@ -1,0 +1,4 @@
+interface:
+  display_name: "AutoDine A SmartStorageVision"
+  short_description: "Build and integrate AutoDine module A"
+  default_prompt: "Maintain AutoDine module A: sync the repository structure and verify its vision-to-ADP-to-Core prototype."
