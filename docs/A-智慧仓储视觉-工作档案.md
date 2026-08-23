@@ -4,7 +4,7 @@
 
 ### 已完成
 
-- 从最新 `origin/main` 开始联动组员更新后的 Core 严格事件协议；没有 force push，没有改写组员远端历史。本轮按用户要求不创建新提交、不 push。
+- 从 `origin/main` 开始联动组员更新后的 Core 严格事件协议；没有 force push，没有改写组员远端历史。
 - 检查 Windows、WSL2、Ubuntu、Docker 与 GPU。设备为 NVIDIA GeForce RTX 5080 Laptop GPU（16 GB）。`nvidia-smi` 的 CUDA 13.1 是驱动可支持上限，不代表 WSL 已安装 13.1 Toolkit。
 - 验证 OpenCV Conda 环境中的 PyTorch `2.13.0+cu130`、torchvision `0.28.0+cu130`、Ultralytics `8.4.123` 可在 RTX 5080 执行 CUDA 推理。
 - 真实 YOLO 水果计数：公共水果碗图片检测到香蕉 1 框、橙子 7 框。香蕉“一串算一框”说明通用 COCO 权重的计数语义仍需现场自定义检测数据校准。
@@ -14,7 +14,7 @@
 - 端到端真实推理：水果框经缺陷分类后，1 个橙子高置信度判为 `defective`，5 个低置信度目标进入 `review`，生成 `quality.abnormal`。没有把低置信度结果伪装为正常。
 - 真实 YOLO 人员检测：真实图片检测到 4 人；门区有人、门开且无授权时生成 `vision.storage.security`。
 - Core 已严格校验两种安全事件，创建告警并产生 `alarm.updated`；同步 AsyncAPI/WebSocket 协议。
-- A 针对性测试通过；补充 YOLO 水果 ID 与 Core 种子目录一致性检查后，全仓库最后一次运行结果为 55 项通过。
+- A 针对性测试通过；补充 YOLO 水果 ID 与 Core 种子目录一致性检查后，与组员最新火灾检测提交合并的全仓库运行结果为 57 项通过。
 
 ### 缺陷检测的准确范围
 
@@ -52,6 +52,13 @@
 - 定位第一次 PyTorch 镜像 pull 的失败层与完整错误：最后一层期望 digest 为 `1953a5f9...`，实际收到 `d0fbaabf...`，Docker 以 `failed precondition` 拒绝提交，没有把错误内容当作可用镜像。
 - 确认根因链包含四个旧/第三方 Docker registry mirrors；移除 mirrors 后 daemon 显示 `[]`。原配置备份为 `C:\Users\Dyf\.docker\daemon.json.autodine-backup-20260824`。
 - 未运行任何 prune，未删除 layer、cache 或镜像。第二次官方源 pull 按用户指令主动停止，交由用户在 WSL2 终端完成。
+- 2026-08-24 再次只读检查时，Docker 仍报告目标 PyTorch 镜像不存在；因此本轮交付继续使用真实 YOLO，未调用 CountGD++，也没有回退到 Mock。
+
+### GitHub 联动记录
+
+- 获取到组员新增的 `6e8a2d0`、`87de26e`、`48e25c6` 三个提交，内容为 B/Core 的火灾双确认能力。
+- 使用普通 merge 保留上述提交及其哈希；唯一冲突位于 Core 事件路由的相邻插入点，解决方式仅为同时保留组员的 `vision.front.fire` 与 A 的 `vision.storage.security` 两条路由。
+- 未修改 `edge/front_vision` 的组员实现，合并后全仓库 57 项测试通过。
 
 ### 未完成及原因
 
