@@ -13,14 +13,28 @@ datasets:
     license: CC BY 4.0
     images: 16000
     classes: [banana, lemon, lulo, mango, orange, strawberry, tamarillo, tomato]
-    status: selected_not_downloaded
+    archive_sha256: 9FF1C7EFEB7C130F6D476ADBEE5C007A12DF4D69960EB2356F0B34FEDB75C59C
+    split: {train: 11200, val: 2400, test: 2400, seed: 42}
+    local_model_sha256: 8CD6F8478B26A5060DBDBCA2CD6F518146DAFBB51545AD0C6D15CFEB3D4285CA
+    status: downloaded_and_yolo_classification_trained_local
   - id: autodine_local_storage_v1
     purpose: camera_domain_validation_and_final_acceptance
     source: team_capture
     license: team_owned
     status: required_not_collected
+  - id: virat_video_dataset
+    purpose: doorway_entry_tracking_and_security_evaluation
+    source: https://viratdata.org/
+    license: VIRAT_Ground_Data_License_Agreement
+    status: selected_not_downloaded
+  - id: ucf_crime
+    purpose: burglary_stealing_anomaly_research_baseline
+    source: https://www.crcv.ucf.edu/projects/real-world/
+    license: research_terms_require_manual_review
+    status: research_reference_not_downloaded
 notes:
   - Keep all image archives and checkpoints outside Git.
   - Record immutable download hashes and split manifests before training.
   - Do not mix images from the same capture burst across train and test splits.
+  - The security prototype has not been trained on VIRAT or UCF-Crime; its current person detector uses pretrained YOLO weights.
 

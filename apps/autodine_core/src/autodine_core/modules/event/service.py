@@ -370,6 +370,44 @@ def process_event(session: Session, envelope: AdpEventEnvelopeSchema) -> Dict[st
             session.commit()
             return {"status": "processed", "event_id": envelope.event_id}
 
+        if envelope.event_type == "vision.storage.security":
+            from autodine_core.modules.alarm.service import open_alarm
+
+            payload = envelope.payload
+            subtype = payload["event_subtype"]
+            if subtype == "unauthorized_entry":
+                message = (
+                    f"storage security unauthorized_entry: "
+                    f"confidence={payload['confidence']:.2f} "
+                    f"people={payload['person_count']} "
+                    f"zone={payload['zone_id']}"
+                )
+            else:
+                message = (
+                    f"storage security unexplained_inventory_decrease: "
+                    f"ingredient={payload['ingredient_id']} "
+                    f"decrease={payload['decrease_quantity']} {payload['unit']} "
+                    f"zone={payload['zone_id']}"
+                )
+            session.add(_build_inbox_record(envelope, status=EventInboxStatus.PROCESSED))
+            alarm = open_alarm(
+                session,
+                store_id=envelope.store_id,
+                source_key=f"storage_security:{envelope.event_id}",
+                severity=envelope.severity,
+                message=message,
+            )
+            _append_outbox(
+                session,
+                trace_id=envelope.trace_id or envelope.event_id,
+                store_id=envelope.store_id,
+                event_type="alarm.updated",
+                severity=envelope.severity,
+                payload=alarm,
+            )
+            session.commit()
+            return {"status": "processed", "event_id": envelope.event_id}
+
         session.add(_build_inbox_record(envelope, status=EventInboxStatus.IGNORED))
         session.commit()
         return {

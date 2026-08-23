@@ -9,6 +9,7 @@ info:
     alarm, and quality namespaces.
 channels:
   vision.storage.detected: {address: vision.storage.detected}
+  vision.storage.security: {address: vision.storage.security}
   vision.front.queue: {address: vision.front.queue}
   vision.front.safety: {address: vision.front.safety}
   inventory.detected: {address: inventory.detected}

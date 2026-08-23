@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationInfo, field_validator, model_validator
 
 
 class EventSourceSchema(BaseModel):
@@ -55,6 +55,38 @@ class VisionStorageDetectedPayloadSchema(BaseModel):
 
     location_id: str
     detections: List[VisionStorageDetectionSchema] = Field(min_length=1)
+
+
+class VisionStorageUnauthorizedEntryPayloadSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    event_subtype: Literal["unauthorized_entry"]
+    confidence: float = Field(ge=0.0, le=1.0)
+    person_count: int = Field(ge=1)
+    door_open: Literal[True]
+    authorization_present: Literal[False]
+    zone_id: str = Field(min_length=1)
+
+
+class VisionStorageInventoryDecreasePayloadSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    event_subtype: Literal["unexplained_inventory_decrease"]
+    confidence: float = Field(ge=0.0, le=1.0)
+    ingredient_id: str = Field(min_length=1)
+    location_id: str = Field(min_length=1)
+    zone_id: str = Field(min_length=1)
+    previous_physical_quantity: Decimal
+    current_physical_quantity: Decimal
+    decrease_quantity: Decimal = Field(gt=0)
+    unit: str = Field(min_length=1)
+    authorized_task_ids: List[str]
+
+
+VisionStorageSecurityPayloadSchema = Union[
+    VisionStorageUnauthorizedEntryPayloadSchema,
+    VisionStorageInventoryDecreasePayloadSchema,
+]
 
 
 class VisionFrontSafetyPayloadSchema(BaseModel):
@@ -122,6 +154,8 @@ class AdpEventEnvelopeSchema(BaseModel):
             return InventoryDetectedPayloadSchema.model_validate(value).model_dump()
         if event_type == "vision.storage.detected":
             return VisionStorageDetectedPayloadSchema.model_validate(value).model_dump()
+        if event_type == "vision.storage.security":
+            return TypeAdapter(VisionStorageSecurityPayloadSchema).validate_python(value).model_dump()
         if event_type == "quality.abnormal":
             return QualityAbnormalPayloadSchema.model_validate(value).model_dump(exclude_none=True)
         if event_type == "queue.updated":

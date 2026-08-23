@@ -6,7 +6,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 
-CORE_EVENT_TYPES = {"inventory.detected", "quality.abnormal", "alarm.opened"}
+CORE_EVENT_TYPES = {"inventory.detected", "quality.abnormal", "vision.storage.security"}
 
 
 def write_events(events: list[dict], path: Path) -> None:

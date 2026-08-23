@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import subprocess
 from decimal import Decimal
@@ -18,6 +19,13 @@ if str(CORE_SOURCE) not in sys.path:
     sys.path.insert(0, str(CORE_SOURCE))
 
 from autodine_core.main import create_app
+
+
+def test_yolo_fruit_ids_match_core_catalog() -> None:
+    catalog = json.loads((REPO_ROOT / "data" / "seed" / "catalog.json").read_text(encoding="utf-8"))
+    ingredients = {item["ingredient_id"]: item for item in catalog["ingredients"]}
+    for ingredient_id in ("apple", "banana", "orange"):
+        assert ingredients[ingredient_id]["unit"] == "pcs"
 
 
 def test_generated_business_events_are_accepted_by_core(tmp_path: Path) -> None:
@@ -44,4 +52,4 @@ def test_generated_business_events_are_accepted_by_core(tmp_path: Path) -> None:
     responses = [client.post("/api/v1/events", json=event) for event in events]
     assert all(response.status_code == 200 for response in responses)
     statuses = {response.json()["data"]["status"] for response in responses}
-    assert statuses == {"processed", "ignored"}
+    assert statuses == {"processed"}

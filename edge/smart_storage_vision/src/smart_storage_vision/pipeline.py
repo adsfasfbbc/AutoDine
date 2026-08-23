@@ -74,7 +74,7 @@ class SmartStoragePipeline:
             )
 
         trace_id = "vision-a-" + uuid4().hex
-        events = [self._diagnostic_event(observations, trace_id)]
+        events = self._vision_events(observations, trace_id)
         previous = self.state_store.load() if self.state_store else {"observations": {}}
         previous_values = previous.get("observations", {})
 
@@ -100,27 +100,30 @@ class SmartStoragePipeline:
             )
         return observations, events
 
-    def _diagnostic_event(self, observations: Sequence[InventoryObservation], trace_id: str) -> dict:
-        return make_event(
-            event_type="vision.storage.detected",
-            trace_id=trace_id,
-            store_id=self.store_id,
-            device_id=self.device_id,
-            payload={
-                "backend": self.backend.name,
-                "observations": [
-                    {
-                        "ingredient_id": item.ingredient_id,
-                        "location_id": item.location_id,
-                        "object_count": item.object_count,
-                        "defective_count": item.defective_count,
-                        "review_count": item.review_count,
-                        "mean_confidence": round(item.mean_confidence, 4),
-                    }
-                    for item in observations
-                ],
-            },
-        )
+    def _vision_events(self, observations: Sequence[InventoryObservation], trace_id: str) -> list[dict]:
+        locations = sorted({item.location_id for item in observations})
+        return [
+            make_event(
+                event_type="vision.storage.detected",
+                trace_id=trace_id,
+                store_id=self.store_id,
+                device_id=self.device_id,
+                payload={
+                    "location_id": location_id,
+                    "detections": [
+                        {
+                            "ingredient_id": item.ingredient_id,
+                            "quantity": decimal_text(item.physical_quantity),
+                            "unit": item.unit,
+                            "confidence": round(item.mean_confidence, 4),
+                        }
+                        for item in observations
+                        if item.location_id == location_id
+                    ],
+                },
+            )
+            for location_id in locations
+        ]
 
     def _inventory_event(self, item: InventoryObservation, trace_id: str) -> dict:
         return make_event(
@@ -153,15 +156,17 @@ class SmartStoragePipeline:
 
     def _loss_alarm(self, item: InventoryObservation, old_value: Decimal, trace_id: str) -> dict:
         return make_event(
-            event_type="alarm.opened",
+            event_type="vision.storage.security",
             trace_id=trace_id,
             store_id=self.store_id,
             device_id=self.device_id,
             severity="warning",
             payload={
-                "alarm_type": "unexplained_inventory_decrease",
+                "event_subtype": "unexplained_inventory_decrease",
+                "confidence": round(item.mean_confidence, 4),
                 "ingredient_id": item.ingredient_id,
                 "location_id": item.location_id,
+                "zone_id": item.location_id,
                 "previous_physical_quantity": decimal_text(old_value),
                 "current_physical_quantity": decimal_text(item.physical_quantity),
                 "decrease_quantity": decimal_text(old_value - item.physical_quantity),

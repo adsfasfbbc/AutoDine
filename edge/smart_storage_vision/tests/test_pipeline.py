@@ -42,6 +42,9 @@ def test_mock_scene_produces_count_quality_and_valid_adp_events(tmp_path: Path) 
         "inventory.detected",
         "quality.abnormal",
     }
+    vision_event = next(event for event in events if event["event_type"] == "vision.storage.detected")
+    assert vision_event["payload"]["location_id"] == "bar"
+    assert {item["ingredient_id"] for item in vision_event["payload"]["detections"]} == {"lemon", "tomato"}
 
     schema = json.loads((REPO_ROOT / "contracts" / "adp" / "v1" / "envelope.schema.json").read_text(encoding="utf-8"))
     validator = Draft202012Validator(schema)
@@ -59,9 +62,13 @@ def test_unexplained_decrease_opens_alarm_but_authorized_task_suppresses_it(tmp_
     reduced.write_text(json.dumps(scene), encoding="utf-8")
 
     _, events = pipeline.analyze(reduced)
-    assert any(event["event_type"] == "alarm.opened" for event in events)
+    assert any(
+        event["event_type"] == "vision.storage.security"
+        and event["payload"]["event_subtype"] == "unexplained_inventory_decrease"
+        for event in events
+    )
 
     pipeline.analyze(source)
     _, authorized_events = pipeline.analyze(reduced, authorized_task_ids=["task-001"])
-    assert all(event["event_type"] != "alarm.opened" for event in authorized_events)
+    assert all(event["event_type"] != "vision.storage.security" for event in authorized_events)
 

@@ -6,6 +6,7 @@ description: >
   emitted only to subscribers for the matching store_id.
 topics:
   - vision.storage.detected
+  - vision.storage.security
   - vision.front.queue
   - inventory.changed
   - inventory.reserved
