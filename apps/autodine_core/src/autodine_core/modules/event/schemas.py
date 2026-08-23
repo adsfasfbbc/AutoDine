@@ -68,6 +68,17 @@ class VisionFrontSafetyPayloadSchema(BaseModel):
     zone_id: str = Field(min_length=1)
 
 
+class VisionFrontFirePayloadSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    event_subtype: Literal["flame_dual_confirm"]
+    confidence: float = Field(ge=0.0, le=1.0)
+    vision_conf: float = Field(ge=0.0, le=1.0)
+    sensor_state: int = Field(ge=0)
+    duration_ms: int = Field(ge=0)
+    zone_id: str = Field(min_length=1)
+
+
 class QueueUpdatedPayloadSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -130,4 +141,6 @@ class AdpEventEnvelopeSchema(BaseModel):
             return DeviceCommandResultPayloadSchema.model_validate(value).model_dump()
         if event_type == "vision.front.safety":
             return VisionFrontSafetyPayloadSchema.model_validate(value).model_dump()
+        if event_type == "vision.front.fire":
+            return VisionFrontFirePayloadSchema.model_validate(value).model_dump()
         return value
