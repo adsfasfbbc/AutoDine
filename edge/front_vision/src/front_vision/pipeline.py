@@ -1,8 +1,10 @@
 """Inference + publishing pipeline for the front_vision edge service.
 
 Runs in a background thread: pulls the newest frame from the capture loop,
-counts people (smoothed, published as queue.updated) and runs the safety
-fusion engine (vision pose + acoustic arousal -> vision.front.safety).
+counts people (smoothed, published as queue.updated), runs the safety
+fusion engine (vision pose + acoustic arousal -> vision.front.safety) and
+the fire dual-confirmation engine (flame vision + Modbus flame sensor ->
+vision.front.fire).
 """
 from __future__ import annotations
 
@@ -14,6 +16,7 @@ from typing import Optional
 from .adp import AdpPublisher
 from .capture import FrameSource
 from .config import FrontVisionConfig
+from .fire_fusion import FireEngine
 from .people import CountSmoother, PersonDetector, count_in_roi
 from .safety_fusion import SafetyEngine
 
@@ -28,12 +31,14 @@ class FrontVisionPipeline:
         capture: FrameSource,
         detector: PersonDetector,
         safety: Optional[SafetyEngine] = None,
+        fire: Optional[FireEngine] = None,
     ) -> None:
         self._config = config
         self._publisher = publisher
         self._capture = capture
         self._detector = detector
         self._safety = safety
+        self._fire = fire
         self._smoother = CountSmoother(config.smooth_window_seconds)
 
         self._stop = threading.Event()
@@ -60,6 +65,8 @@ class FrontVisionPipeline:
         self._publisher.start_worker()
         if self._safety is not None:
             self._safety.start()
+        if self._fire is not None:
+            self._fire.start()
         self._thread = threading.Thread(target=self._run, name="front-vision-pipeline", daemon=True)
         self._thread.start()
 
@@ -67,6 +74,8 @@ class FrontVisionPipeline:
         self._stop.set()
         if self._safety is not None:
             self._safety.stop()
+        if self._fire is not None:
+            self._fire.stop()
         if self._thread is not None:
             self._thread.join(timeout=5.0)
 
@@ -79,6 +88,12 @@ class FrontVisionPipeline:
         if self._safety is None:
             return None
         return self._safety.alert_state()
+
+    def fire_alert(self) -> Optional[dict]:
+        """Newest fire alert for the GUI/web banner (None when inactive)."""
+        if self._fire is None:
+            return None
+        return self._fire.alert_state()
 
     # -- publishing --------------------------------------------------------
     def publish_queue_update(self, count: int) -> None:
@@ -140,6 +155,10 @@ class FrontVisionPipeline:
         if self._safety is not None:
             self._safety.update(frame, now)
 
+        # --- fire fusion (flame vision AND Modbus flame sensor) ------------
+        if self._fire is not None:
+            self._fire.update(frame, now)
+
         # --- debug preview frame (memory-only, zero cost when disabled) -----
         if cfg.preview_enabled:
             self._annotate_and_store(frame, detections, smoothed)
@@ -163,6 +182,12 @@ class FrontVisionPipeline:
         if alert is not None:
             cv2.putText(
                 annotated, f"SAFETY {alert['severity']}", (8, 52),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2,
+            )
+        fire = self.fire_alert()
+        if fire is not None:
+            cv2.putText(
+                annotated, f"FIRE {fire['severity']}", (8, 80),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2,
             )
         ok, buf = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 70])

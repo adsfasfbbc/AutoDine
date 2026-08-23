@@ -1,0 +1,19 @@
+{
+  "protocol": "ADP",
+  "version": "1.0",
+  "event_id": "mock-front-fire-001",
+  "trace_id": "mock-front-fire-001",
+  "event_type": "vision.front.fire",
+  "severity": "warning",
+  "timestamp": "2026-08-21T10:20:00Z",
+  "store_id": "store-main",
+  "source": {"module": "front_vision", "device_id": "front-cam-01"},
+  "payload": {
+    "event_subtype": "flame_dual_confirm",
+    "confidence": 0.87,
+    "vision_conf": 0.87,
+    "sensor_state": 1,
+    "duration_ms": 0,
+    "zone_id": "front-hall"
+  }
+}

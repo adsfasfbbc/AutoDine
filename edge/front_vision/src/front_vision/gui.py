@@ -140,11 +140,20 @@ class FrontVisionWindow(QMainWindow):
         )
 
         alert = pipeline.safety_alert() if hasattr(pipeline, "safety_alert") else None
+        fire = pipeline.fire_alert() if hasattr(pipeline, "fire_alert") else None
+        banners = []
         if alert:
-            self._banner.setText(
+            banners.append(
                 f"⚠ 冲突告警 {alert['severity'].upper()} "
                 f"(vision={alert['vision_score']}, audio={alert['audio_score']})"
             )
+        if fire:
+            banners.append(
+                f"🔥 火焰双确认告警 {fire['severity'].upper()} "
+                f"(vision_conf={fire['vision_conf']}, sensor={fire['sensor_state']})"
+            )
+        if banners:
+            self._banner.setText("  |  ".join(banners))
             self._banner.show()
         else:
             self._banner.hide()

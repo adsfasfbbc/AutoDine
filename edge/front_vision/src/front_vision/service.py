@@ -63,10 +63,18 @@ async function refresh() {
     document.getElementById("fps").textContent = m.inference_fps;
     document.getElementById("captured").textContent = m.frames_captured;
     const banner = document.getElementById("banner");
+    const alerts = [];
     if (m.safety_alert) {
+      alerts.push("⚠ 冲突告警 " + m.safety_alert.severity.toUpperCase()
+        + " (vision=" + m.safety_alert.vision_score + ", audio=" + m.safety_alert.audio_score + ")");
+    }
+    if (m.fire_alert) {
+      alerts.push("🔥 火焰双确认告警 " + m.fire_alert.severity.toUpperCase()
+        + " (vision_conf=" + m.fire_alert.vision_conf + ", sensor=" + m.fire_alert.sensor_state + ")");
+    }
+    if (alerts.length) {
       banner.style.display = "block";
-      banner.textContent = "⚠ 冲突告警 " + m.safety_alert.severity.toUpperCase()
-        + " (vision=" + m.safety_alert.vision_score + ", audio=" + m.safety_alert.audio_score + ")";
+      banner.textContent = alerts.join("  |  ");
     } else {
       banner.style.display = "none";
     }
@@ -120,7 +128,56 @@ def build_pipeline(
         height=config.frame_height,
     )
     safety = _build_safety_engine(config, publisher)
-    return FrontVisionPipeline(config, publisher, capture, detector, safety)
+    fire = _build_fire_engine(config, publisher)
+    return FrontVisionPipeline(config, publisher, capture, detector, safety, fire=fire)
+
+
+def _build_fire_engine(config: FrontVisionConfig, publisher: AdpPublisher):
+    """Wire the flame vision/sensor/fusion fire chain; degrades gracefully.
+
+    A missing fire model or an unopenable serial port only disables that
+    channel — the AND fusion then never publishes, per design
+    (single-channel = debug log).
+    """
+    if not config.fire_enabled:
+        return None
+    from .fire_fusion import FireEngine
+
+    if config.simulate_fire:
+        logger.info("fire simulation enabled; injecting synthetic dual-channel cues")
+        return FireEngine(config, publisher, simulate=True)
+
+    vision = None
+    try:
+        import os
+
+        from .fire_vision import FireDetector
+
+        onnx_path = config.fire_model_path.replace(".pt", ".onnx")
+        onnx_path = onnx_path if os.path.exists(onnx_path) else None
+        vision = FireDetector(
+            model_path=config.fire_model_path,
+            onnx_model_path=onnx_path,
+            backend=config.detector_backend,
+            confidence=config.fire_confidence,
+        )
+    except Exception as exc:
+        logger.warning("fire vision detector unavailable (%s); vision channel disabled", exc)
+
+    sensor = None
+    if config.fire_sensor_enabled:
+        from .fire_sensor import FlameSensorMonitor, default_sensor_port
+
+        sensor = FlameSensorMonitor(
+            port=config.fire_sensor_port or default_sensor_port(),
+            baudrate=config.fire_sensor_baudrate,
+            poll_seconds=config.fire_sensor_poll_seconds,
+            timeout_seconds=config.fire_sensor_timeout_seconds,
+        )
+    else:
+        logger.info("fire sensor channel disabled (--no-fire-sensor); vision-only fire cues will not publish")
+
+    return FireEngine(config, publisher, vision_detector=vision, sensor_monitor=sensor)
 
 
 def _build_safety_engine(config: FrontVisionConfig, publisher: AdpPublisher):
@@ -223,6 +280,7 @@ def create_app(
             "queue_zone_id": config.queue_zone_id,
             "preview_enabled": config.preview_enabled,
             "safety_alert": pipeline.safety_alert(),
+            "fire_alert": pipeline.fire_alert(),
         }
 
     @app.get("/", response_class=HTMLResponse)

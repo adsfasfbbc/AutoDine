@@ -1,7 +1,8 @@
 # front_vision (M02)
 
 AutoDine 前厅边缘视觉服务：摄像头采集 → YOLO 人数计数（`queue.updated`）+
-冲突检测（`vision.front.safety`），事件以 ADP v1.0 协议发布到 Core 中台。
+冲突检测（`vision.front.safety`）+ 火焰双确认检测（`vision.front.fire`），
+事件以 ADP v1.0 协议发布到 Core 中台。
 因隐私考虑已移除表情识别，CX 体验指标改由排队/等待时长等非生物特征数据替代。
 
 ## 安装
@@ -15,7 +16,7 @@ edge/front_vision/.venv/Scripts/python -m pip install --upgrade pip
 edge/front_vision/.venv/Scripts/python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 edge/front_vision/.venv/Scripts/python -m pip install ultralytics onnxruntime \
     opencv-python fastapi uvicorn httpx pytest jsonschema "pyside6>=6.8,<6.9" \
-    sounddevice librosa
+    sounddevice librosa pyserial
 # 注意：安装 ultralytics 可能把 torch 覆盖成 PyPI 的 CPU 版，务必再执行一次上一行的
 # cu128 安装（pip 会跳过已满足的其余依赖），并用 torch.cuda.is_available() 验证。
 # 以可编辑方式安装本包，使 python -m front_vision 可直接使用：
@@ -24,7 +25,12 @@ edge/front_vision/.venv/Scripts/python -m pip install -e edge/front_vision --no-
 
 模型文件放入 `edge/front_vision/models/`（已 gitignore）：
 - `yolo11n.pt` — ultralytics 首次运行时自动下载到当前目录，请移动到 `models/`；
-- `yolo11n-pose.pt` — 冲突检测的姿态模型，同样由 ultralytics 自动下载后移动到 `models/`。
+- `yolo11n-pose.pt` — 冲突检测的姿态模型，同样由 ultralytics 自动下载后移动到 `models/`；
+- `fire.pt` — 火焰检测模型（YOLO26n 微调的权重，单类别 fire）。训练方式见仓库根目录
+  `scripts/train_fire.py`（`--data` 指向外部 YOLO 格式数据集的 data.yaml，数据集不入库），
+  训练产物 `runs/detect/fire_train/weights/best.pt` 拷贝为 `models/fire.pt`；
+  同目录的 `best.onnx` 拷贝为 `models/fire.onnx` 供 onnxruntime 兜底后端使用。
+  **模型权重绝不提交进库**。
 
 已知问题：
 - 发布是异步的：事件进入内存队列由后台线程重试发送（3 次指数退避），Core 宕机不会阻塞推理。
@@ -41,7 +47,10 @@ cd edge/front_vision
 
 CLI 参数：`--source`、`--camera-index`、`--core-url`、`--store-id`、`--device-id`、
 `--host`、`--port`（默认 5060，启动时检测占用）、`--backend auto|torch`、`--no-preview`、`--log-level`、
-`--no-audio`（关闭声学通道，纯视觉按融合规则不上报）、`--simulate-safety`（注入合成双模态信号做演示）。
+`--no-audio`（关闭声学通道，纯视觉按融合规则不上报）、`--simulate-safety`（注入合成双模态信号做演示）、
+`--no-fire`（整体关闭火焰检测）、`--no-fire-sensor`（关闭火焰传感器通道，纯视觉按融合规则不上报）、
+`--fire-port`（火焰传感器串口，默认 Windows `COM3` / Linux `/dev/ttyUSB0`）、
+`--fire-model`（火焰模型路径，默认 `models/fire.pt`）、`--simulate-fire`（注入合成双通道火焰信号做演示）。
 
 ## 桌面 GUI 预览（--gui）
 
@@ -79,6 +88,27 @@ QTimer ~30ms 刷新），右侧面板显示当前人数、检测后端、推理 
 **隐私设计**：音频只提物理特征，原始 PCM 只留 2s 内存环形缓冲、提完即弃、不落盘、不做 ASR；
 视觉只用骨骼关键点轨迹，不存图像；双模态不同时成立不上报。
 
+## 火焰双确认检测（flame vision + 火焰传感器融合）
+
+**融合规则**：YOLO 火焰视觉检测与 Modbus 火焰传感器必须在 ±3s 时间窗内同时判定有火，才发布
+`vision.front.fire`；单通道只记 debug 日志，绝不上报。severity 默认 `warning`，
+持续 >10s 或冷却期内重复触发升 `critical`；30s 冷却去重。
+
+- 视觉（`fire_vision.py`）：单类别火焰检测模型 `models/fire.pt`（训练见 `scripts/train_fire.py`），
+  torch 优先、onnxruntime 兜底（`models/fire.onnx`）；火焰推理在 `FV_INFER_EVERY_N_FRAMES`
+  之上再按 `FV_FIRE_INFER_EVERY_N_FRAMES` 节流（中间帧复用上次结果）。检出框最高置信度即 `vision_conf`。
+- 传感器（`fire_sensor.py`）：pyserial 后台线程每 0.1s 发送 Modbus 查询指令
+  `02 03 00 07 00 01 35 F8`（从站 0x02、功能码 0x03、寄存器 0x0007、数量 1、CRC 0x35F8），
+  读 7 字节应答，取 hex 第 6:10 位转 int，`==1` 表示传感器检出火焰。串口打开失败只记 warning
+  并降级为"传感器不检出"，服务不中断（按 AND 规则不再上报）。
+- 融合（`fire_fusion.py`）：双通道 AND + 冷却 + 升级，经 adp.py 发布，payload：
+  `{event_subtype: "flame_dual_confirm", confidence, vision_conf, sensor_state, duration_ms, zone_id}`。
+- 触发时 GUI 与网页调试页显示红色告警横幅（与冲突告警并列，数秒后自动隐藏）。
+
+**传感器接线**：火焰传感器（Modbus RTU，从站地址 0x02）经 USB 转 485/串口模块接入边缘主机，
+Windows 上设备管理器里对应 `COMx`（用 `--fire-port` 或 `FV_FIRE_SENSOR_PORT` 指定），
+Linux 上通常为 `/dev/ttyUSB0`；9600 8N1。寄存器 0x0007 为火焰状态（1=有火）。
+
 ## 配置项（环境变量，前缀 `FV_`）
 
 | 变量 | 默认 | 说明 |
@@ -109,6 +139,19 @@ QTimer ~30ms 刷新），右侧面板显示当前人数、检测后端、推理 
 | `FV_SAFETY_FUSION_WINDOW_S` | 3 | 双模态 ±3s 融合窗 |
 | `FV_SAFETY_COOLDOWN_S` | 30 | 冷却去重 |
 | `FV_SAFETY_CRITICAL_AFTER_S` | 10 | 持续升级 critical 阈值 |
+| `FV_FIRE_ENABLED` | true | 火焰检测总开关（--no-fire 对应 false） |
+| `FV_FIRE_ZONE_ID` | front-hall | fire 事件区域 ID |
+| `FV_FIRE_MODEL_PATH` | models/fire.pt | 火焰检测模型路径 |
+| `FV_FIRE_CONFIDENCE` | 0.25 | 火焰框置信度阈值 |
+| `FV_FIRE_INFER_EVERY_N_FRAMES` | 5 | 火焰推理节流（在每 N 帧推理之上再节流） |
+| `FV_FIRE_SENSOR_ENABLED` | true | 火焰传感器通道开关（--no-fire-sensor 对应 false） |
+| `FV_FIRE_SENSOR_PORT` | （平台默认） | 传感器串口：Windows `COM3` / Linux `/dev/ttyUSB0` |
+| `FV_FIRE_SENSOR_BAUDRATE` | 9600 | 串口波特率 |
+| `FV_FIRE_SENSOR_POLL_S` | 0.1 | Modbus 轮询间隔 |
+| `FV_FIRE_SENSOR_TIMEOUT_S` | 0.5 | 串口读超时 |
+| `FV_FIRE_FUSION_WINDOW_S` | 3 | 双通道 ±3s 融合窗 |
+| `FV_FIRE_COOLDOWN_S` | 30 | 冷却去重 |
+| `FV_FIRE_CRITICAL_AFTER_S` | 10 | 持续升级 critical 阈值 |
 | `FV_PORT` | 5060 | HTTP 服务端口 |
 
 排队 ROI 在 `config.py` 的 `queue_roi`（归一化 x/y/w/h），v1 默认全画面。
@@ -131,6 +174,7 @@ QTimer ~30ms 刷新），右侧面板显示当前人数、检测后端、推理 
 |---|---|---|---|
 | `queue.updated` | info | `{zone_id, waiting_count}`（estimated_wait_seconds 暂缺省） | 人数变化或每 10s 心跳 |
 | `vision.front.safety` | warning/critical | `{event_subtype, confidence, vision_score, audio_score, duration_ms, zone_id}` | 双模态 ±3s 同时成立；>10s 或冷却期内重触发升 critical |
+| `vision.front.fire` | warning/critical | `{event_subtype, confidence, vision_conf, sensor_state, duration_ms, zone_id}` | 火焰视觉+传感器 ±3s 双确认；>10s 或冷却期内重触发升 critical |
 
 人数经 3 秒滑动窗口中位数平滑。
 
