@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manager Agent · AutoDine</title>
+  <link rel="stylesheet" href="static/style.css" />
+</head>
+<body data-agent="manager" style="--accent:#7c3aed">
+  <header class="bar">
+    <div class="bar-emoji">📊</div>
+    <div class="bar-text">
+      <h1>Manager Agent</h1>
+      <p>店长助手 · 库存质量 / 告警 / 排队 / 运营总结</p>
+    </div>
+    <a class="bar-link" href="/">返回</a>
+  </header>
+  <div id="chat" class="chat" aria-live="polite"></div>
+  <form id="composer" class="composer">
+    <input id="input" type="text" placeholder="比如：库存怎么样 / 今天的运营总结" autocomplete="off" />
+    <button id="send" type="submit">发送</button>
+    <button id="clear" type="button">清空</button>
+  </form>
+  <script src="static/app.js"></script>
+</body>
+</html>

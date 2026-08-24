@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: autodine-agent-hub
+Version: 0.1.0
+Summary: AutoDine Agent Hub: Consumer / Kitchen / Manager agents driven by tool calling against the Core REST API.
+Requires-Python: >=3.10
+Requires-Dist: openai>=1.40
+Requires-Dist: httpx>=0.28
+Requires-Dist: fastapi>=0.115
+Requires-Dist: uvicorn>=0.30
+Requires-Dist: pydantic-settings>=2.5
+Provides-Extra: test
+Requires-Dist: pytest>=8; extra == "test"

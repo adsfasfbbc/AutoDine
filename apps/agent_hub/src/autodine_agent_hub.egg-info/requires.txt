@@ -1,0 +1,8 @@
+openai>=1.40
+httpx>=0.28
+fastapi>=0.115
+uvicorn>=0.30
+pydantic-settings>=2.5
+
+[test]
+pytest>=8

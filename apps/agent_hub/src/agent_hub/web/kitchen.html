@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kitchen Agent · AutoDine</title>
+  <link rel="stylesheet" href="static/style.css" />
+</head>
+<body data-agent="kitchen" style="--accent:#2563eb">
+  <header class="bar">
+    <div class="bar-emoji">👨‍🍳</div>
+    <div class="bar-text">
+      <h1>Kitchen Agent</h1>
+      <p>后厨助手 · 领料清单 / 生产状态推进</p>
+    </div>
+    <a class="bar-link" href="/">返回</a>
+  </header>
+  <div id="chat" class="chat" aria-live="polite"></div>
+  <form id="composer" class="composer">
+    <input id="input" type="text" placeholder="比如：查看订单 <order_id> 的领料清单" autocomplete="off" />
+    <button id="send" type="submit">发送</button>
+    <button id="clear" type="button">清空</button>
+  </form>
+  <script src="static/app.js"></script>
+</body>
+</html>

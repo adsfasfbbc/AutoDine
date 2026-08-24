@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Consumer Agent · AutoDine</title>
+  <link rel="stylesheet" href="static/style.css" />
+</head>
+<body data-agent="consumer" style="--accent:#16a34a">
+  <header class="bar">
+    <div class="bar-emoji">🛒</div>
+    <div class="bar-text">
+      <h1>Consumer Agent</h1>
+      <p>消费者点餐助手 · 菜单推荐 / 智能点餐 / 查单退单</p>
+    </div>
+    <a class="bar-link" href="/">返回</a>
+  </header>
+  <div id="chat" class="chat" aria-live="polite"></div>
+  <form id="composer" class="composer">
+    <input id="input" type="text" placeholder="比如：推荐一杯含奶饮品 / 点一杯美式" autocomplete="off" />
+    <button id="send" type="submit">发送</button>
+    <button id="clear" type="button">清空</button>
+  </form>
+  <script src="static/app.js"></script>
+</body>
+</html>
