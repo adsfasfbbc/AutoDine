@@ -40,7 +40,7 @@
 - YOLO 计数/缺陷：`edge/smart_storage_vision/run_yolo_inventory_demo.py`
 - YOLO 缺陷训练：`edge/smart_storage_vision/train_quality_yolo.py`
 - YOLO 防盗：`edge/smart_storage_vision/run_security_demo.py`
-- 本地权重：`edge/smart_storage_vision/output/training/fruit_quality_yolo/weights/best.pt`（被 Git 忽略）
+- 本地权重：`edge/smart_storage_vision/output/training/fruit_quality_yolo26/weights/best.pt`（被 Git 忽略）
 - 工作后续：`docs/A-智慧仓储视觉-下一步计划.md`
 
 ## 2026-08-24 CountGD++ 部署暂停与交接
@@ -76,3 +76,69 @@ docker pull pytorch/pytorch:2.7.1-cuda12.8-cudnn9-devel
 ```
 
 成功后保留最后的 image digest 输出，再通知 Codex 从 Stage 3 继续。详细验证顺序见 `docs/COUNTGD_DEPLOYMENT.md`。
+
+## 2026-08-24 YOLO11 → YOLO26 本地迁移
+
+### 已完成
+
+- 选择 YOLO26n，而不是 DETR/Faster R-CNN：现有 Ultralytics 管线可直接复用，检测、分类和边缘导出路径一致，适合时间紧迫的实时原型；CountGD++ 继续并行作为开放词汇计数后端。
+- 计数与人员检测默认权重改为 `yolo26n.pt`；缺陷训练默认权重改为 `yolo26n-cls.pt`，没有把旧 YOLO11 权重改名冒充新模型。
+- 在 RTX 5080 上用原 11,200/2,400/2,400 划分重新训练 YOLO26n-cls 10 轮。第 10 轮验证 top-1 为 99.958%、top-5 为 100%；独立 test top-1/top-5 均为 100%。新 `best.pt` SHA-256 为 `16EB3FAA08AB65C269D319B1317CA7F2676DC04AB6A622038A22D21A87208D86`。
+- 公共领域水果盘真实推理得到苹果 6 框、香蕉 1 框、橙子 7 框，并生成 5 个 ADP 事件；YOLO26 人员检测在真实图片中检测到 5 人并生成未授权进入事件。
+- YOLO26 验证完成后删除旧 `yolo11n.pt`、`yolo11n-cls.pt` 和旧 YOLO11 训练/测试输出，释放约 20.6 MB；FRUIT-16K 与全部 YOLO26 权重保留。旧文件未进入回收站，需要时只能重新下载或训练。
+
+### 仍需如实说明
+
+- 人工抽查发现 1 张 `F_Banana` 验证图片被高置信度判为 `S_Banana`；公共领域水果盘也产生 1 个 `defective` 与 3 个 `review`。因此公开数据汇总高分不能证明现场缺陷识别可靠，摄像头测试必须重点统计误报。
+- COCO 检测器对 FRUIT-16K 的近距离单果分类图片没有框，这不是 Mock，也不是缺陷分类器失败；计数验收应使用货架/水果盘场景并最终训练现场 YOLO26 检测权重。
+- 门状态和授权状态仍为命令行模拟；只有人员检测是真实 YOLO26 推理。
+
+## 2026-08-24 JupyterLab 摄像头原型（本地实现）
+
+### 已完成
+
+- 新增 `edge/smart_storage_vision/notebooks/camera_realtime_yolo26.ipynb`，在 Jupyter 页面内持续刷新带框画面。
+- 同一 YOLO26n 检测器处理苹果、香蕉、橙子和人员；水果裁剪继续使用已训练的 YOLO26n-cls 执行整果品质分类。
+- 画面和状态栏展示原始品质类别、`good/defective/review`、置信度、当前视野水果数量与人数。
+- 推理运行在后台线程，Notebook 单元格可返回以响应红色停止按钮；停止后释放摄像头。后台异常会保留并显示，不会伪装成正常停止。
+- 新增硬件依赖文件，明确不通过普通 requirements 覆盖硬件厂商提供的 PyTorch/CUDA。
+- 当前人员功能只是“视野内人数”，没有使用 Mock 门状态或授权状态，也没有在缺少输入时虚构未授权进入结果。
+
+### 尚未完成及原因
+
+- 尚未在目标硬件读取真实摄像头；用户还未连接设备，硬件型号、架构、摄像头接口和 Jupyter 可访问性尚待现场确认。
+- 尚未测量目标设备 FPS、延迟、温度和显存；这些只能在实际硬件模型栈和摄像头输入下测量。
+- 当前计数是单帧当前视野计数，不是 Tracking/越线累计计数。
+- 当前缺陷能力仍是整果分类，不是病斑、霉斑或破损框/分割。
+- 正式 UI 尚未建设；本阶段只交付 Jupyter 可视化，后续由 F 模块消费 A/Core 接口实现。
+
+## 2026-08-24 Orin摄像头实机验收与发布前整合
+
+### 已完成
+
+- 在NVIDIA Orin提供的JupyterLab中打开真实USB摄像头，实时画面、人员检测框、`person`标签、当前人数和停止释放均成功；该过程没有使用Mock。
+- 首次失败时，摄像头帧、模型SHA-256、COCO类别表和CUDA均正常，但硬件Ultralytics `8.3.58`在CPU/GPU上都漏检清晰人员并产生错误类别。相同截图在本地 `8.4.123`中检测到两个person框，置信度约0.926和0.618，定位为YOLO26运行库版本不兼容，而不是训练、视频输入或CUDA单点问题。
+- 通过官方离线wheel只把Ultralytics升级到 `8.4.123`，保留Orin原有PyTorch `2.3.0`和OpenCV `4.12.0`；重启Jupyter内核后实时人员检测恢复正常。
+- 摄像头Notebook继续提供当前视野水果计数与整果品质分类。按用户决定，本阶段接受分类原型，不继续开发病斑框/分割。
+- FRUIT-16K哈希审计确认16,000张中只有14,727个不同文件，600组完全重复图片跨数据划分；原始接近100%的指标受泄漏影响。排除与训练集完全相同的图片后，验证集2,128张有1次品质误判，测试集2,134张0次，但仍不能排除近重复帧和现场域偏移。
+- 用户已手动pull `pytorch/pytorch:2.7.1-cuda12.8-cudnn9-devel`；本地只读检查确认digest为 `sha256:3d614dfd422b7e43647491cbf07d6acc516c032fc49c594a94afdebd52552fb9`，大小9,356,854,547字节。没有prune；Stage 3和CountGD++后续按用户要求暂停。
+- 获取远端最新main并使用fast-forward原样接入组员的环境传感器提交；没有修改 `edge/env-sensor`、B、C、D、E或F模块实现。
+- 发布前全仓库按项目配置运行59项测试全部通过；Notebook代码单元可编译、无输出，数据清单YAML可解析。
+- 发布前真实模型复核：水果盘得到苹果6、香蕉1、橙子7，苹果中1个 `defective`、3个 `review`，生成5个A事件；人员图检测5人。在命令行模拟门开且无授权的前提下生成 `vision.storage.security`，模拟输入已在结果中标明。
+- 重新生成本地硬件交付包 `AutoDine-camera-yolo26-prototype-20260824-v2.zip`，包含摄像头源码/Notebook、两个模型权重和Ultralytics 8.4.123离线wheel，排除Git历史、数据集、缓存、画面、skill和 `MISSION.md`；该zip不上传GitHub。
+
+### 发布前风险审查
+
+- A摄像头Notebook没有硬编码实测内网IP、RTSP密码、API Key或Core凭据，且提交版本没有输出单元格，不包含人员截图。
+- 模型、数据集、离线wheel、交付zip、摄像头画面、skill和 `MISSION.md`不进入Git提交。
+- `publish_to_core`当前没有认证/TLS配置，只能视为受信任本地原型接口；跨主机部署前必须由C/D补充认证网关或mTLS、来源/速率限制与重放防护。
+- JupyterLab必须启用token/密码并限制在可信局域网/VPN/SSH隧道，不公开暴露8888端口。
+- 仓库中组员历史提交已存在若干 `__pycache__/*.pyc`，本次不擅自删除或改写组员文件；建议由对应模块负责人另行清理。
+
+### 仍未完成及原因
+
+- 尚未用真实苹果、香蕉、橙子完成Orin摄像头的逐类现场准确率记录；本次实机已确认人员视觉链路，不能据此假设水果效果。
+- 摄像头实时循环尚未直接发布稳定后的ADP事件；当前真实图片管线与Core集成测试已存在，但实时多帧需要节流/去抖，避免每帧重复写库存或告警。
+- 未授权进入的人员检测、规则和Core告警已具备，但真实门磁/门锁状态及授权窗口尚未接入，因此防盗硬件端到端仍未完成。
+- CountGD++只完成基础镜像pull，尚未完成Stage 3、GroundingDINO、Detectron2、checkpoint、真实推理或A适配；这是按用户指令暂停，不是部署成功。
+- 正式UI、Tracking/越线累计计数和病斑区域定位未实现；分别留给F联动及后续增强。

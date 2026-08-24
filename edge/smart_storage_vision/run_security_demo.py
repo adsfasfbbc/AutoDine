@@ -27,7 +27,7 @@ def _roi(value: str) -> tuple[float, float, float, float]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run real YOLO person detection for storage-door security")
     parser.add_argument("source", type=Path)
-    parser.add_argument("--model", default="yolo11n.pt")
+    parser.add_argument("--model", default="yolo26n.pt")
     parser.add_argument("--roi", type=_roi, default=(0.0, 0.0, 1.0, 1.0))
     parser.add_argument("--door-open", action="store_true")
     parser.add_argument("--authorized", action="store_true")
@@ -50,7 +50,8 @@ def main() -> int:
         device_id="storage-cam-01",
     )
     result = {
-        "inference_backend": "ultralytics_yolo11n",
+        "inference_backend": "ultralytics-yolo",
+        "model": args.model,
         "door_state_source": "command_line_demo",
         "observation": observation.to_dict(),
         "event": event,
@@ -63,4 +64,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

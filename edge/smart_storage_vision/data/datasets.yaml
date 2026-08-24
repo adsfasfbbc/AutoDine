@@ -15,8 +15,16 @@ datasets:
     classes: [banana, lemon, lulo, mango, orange, strawberry, tamarillo, tomato]
     archive_sha256: 9FF1C7EFEB7C130F6D476ADBEE5C007A12DF4D69960EB2356F0B34FEDB75C59C
     split: {train: 11200, val: 2400, test: 2400, seed: 42}
-    local_model_sha256: 8CD6F8478B26A5060DBDBCA2CD6F518146DAFBB51545AD0C6D15CFEB3D4285CA
-    status: downloaded_and_yolo_classification_trained_local
+    model_family: yolo26n-cls
+    local_model_sha256: 16EB3FAA08AB65C269D319B1317CA7F2676DC04AB6A622038A22D21A87208D86
+    validation_top1: 0.99958
+    test_top1: 1.0
+    unique_sha256_images: 14727
+    exact_duplicate_groups: 1273
+    cross_split_exact_duplicate_groups: 600
+    validation_after_excluding_train_exact_duplicates: {images: 2128, quality_errors: 1, accuracy: 0.9995300752}
+    test_after_excluding_train_exact_duplicates: {images: 2134, quality_errors: 0, accuracy: 1.0}
+    status: downloaded_and_yolo26_classification_trained_local
   - id: autodine_local_storage_v1
     purpose: camera_domain_validation_and_final_acceptance
     source: team_capture
@@ -36,5 +44,6 @@ notes:
   - Keep all image archives and checkpoints outside Git.
   - Record immutable download hashes and split manifests before training.
   - Do not mix images from the same capture burst across train and test splits.
+  - FRUIT-16K original split metrics are inflated by exact cross-split duplicates; even the exact-deduplicated audit may retain near-duplicate capture frames.
   - The security prototype has not been trained on VIRAT or UCF-Crime; its current person detector uses pretrained YOLO weights.
 

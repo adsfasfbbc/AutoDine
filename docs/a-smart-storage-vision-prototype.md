@@ -2,7 +2,7 @@
 
 ## Delivery boundary
 
-This prototype implements module A only. It demonstrates the required chain from a stable Mock scene through ingredient counting and quality screening to ADP v1 events that AutoDineCore accepts. It does not claim that CountGD++ has already been installed/trained, that a real RTSP camera has been tested, or that Jetson performance has been measured.
+This prototype implements module A only. Real YOLO26 image inference demonstrates fruit counting, whole-fruit quality classification, person detection, ADP v1 events, and AutoDineCore acceptance; Mock remains only for deterministic protocol regression. An NVIDIA Orin USB-camera/JupyterLab session has verified live frames, person boxes/labels/current count, CUDA inference, and clean stop. It does not claim that RTSP, real door/authorization sensors, live-camera ADP publishing, or CountGD++ inference has been completed.
 
 ## Architecture decision
 
@@ -13,7 +13,7 @@ RTSP / image / Mock scene
 frame sampling + storage-zone mapping
           |
           v
-CountGD++ open-world detection/count  ---> low-confidence visual exemplars
+YOLO26 detection/count (current) ----> CountGD++ open-world experiment (paused)
           |                                      |
           +---- object crops --------------------+
                           |
@@ -33,7 +33,7 @@ calibration (object -> g/ml/pcs) + snapshot comparison
           +--> display_status.json (local demo bridge)
 ```
 
-CountGD++ is preferred for counting because it supports positive/negative text or visual prompts and pseudo-exemplars, which suits changing fruit/food categories. The official implementation currently expects a Linux/CUDA toolchain and a 1.25 GB checkpoint, so it is isolated behind a backend interface. A compact YOLO model remains the practical Jetson deployment fallback and the first defect classifier. Faster R-CNN is retained only as an offline accuracy baseline; it adds deployment cost without solving open-world prompts.
+CountGD++ remains the preferred research experiment because it supports positive/negative text or visual prompts and pseudo-exemplars, which suits changing fruit/food categories. Its PyTorch 2.7.1/cu128 Docker base image is present locally, but Stage 3, dependencies, checkpoint, inference, and A integration are paused. YOLO26 is therefore the real operational prototype for detection/counting, person detection, and whole-fruit quality classification. Faster R-CNN is retained only as an offline accuracy baseline.
 
 Counting and defect detection are deliberately separated. CountGD++ localizes/counts the requested ingredient. A quality model evaluates each crop. A VLM is used only when the quality confidence falls below the threshold or the prompt-based and trained models disagree. This bounds latency, cost, and network dependence.
 
@@ -59,18 +59,18 @@ Sources: [official CountGD++ repository](https://github.com/niki-amini-naieni/Co
 
 ## Hardware path
 
-- Camera: begin with USB/video files, then add an OpenCV/GStreamer RTSP source on Jetson. Credentials stay in environment variables and never enter Git.
-- Jetson Orin Nano: benchmark resized frame rate, TensorRT/FP16 YOLO, thermal throttling, and end-to-end event latency. Run CountGD++ remotely first if local memory/latency misses the demo target.
+- Camera: USB capture is working in JupyterLab on Orin; RTSP remains future work. Credentials stay in environment variables or untracked local configuration and never enter Git.
+- NVIDIA Orin: PyTorch 2.3.0/CUDA/OpenCV 4.12.0 plus Ultralytics 8.4.123 has verified live person detection. Old Ultralytics 8.3.58 was incompatible with YOLO26 inference. Fruit field accuracy, sustained FPS, thermal behavior, and end-to-end event latency still require measurement.
 - Zeuslap: it is treated as an HDMI display, not a vision compute board. The prototype writes a status JSON; DineWeb or HardwareHub renders/controls the final screen. This keeps module ownership clean.
 
 ## Next checkpoints
 
-1. Freeze A payload fields and production-task authorization query with module C.
-2. Capture 100-300 representative local frames and define ingredient/calibration labels.
-3. Run CountGD++ zero/few-shot baseline on OmniCount fruit and local frames; record MAE, precision/recall, latency, VRAM, and failure cases.
-4. Train a compact YOLO quality model on FRUIT-16K crops plus local data; evaluate per fruit and per defect type.
-5. Add RTSP sampling/tracking, debounce over multiple frames, MQTT publishing, and device health.
-6. Benchmark on Jetson and choose local CountGD++, local YOLO, or hybrid remote counting based on measured demo constraints.
+1. Test real apple/banana/orange scenes on the Orin camera and record count/quality errors and FPS.
+2. Add multi-frame stability/debounce before publishing camera observations to the existing ADP/Core path.
+3. Replace simulated door/authorization flags with HardwareHub/Core inputs and verify a real unauthorized-entry alarm.
+4. Add tracking/line crossing only when cumulative flow count is required; current output is visible-object count.
+5. Build the final UI in DineWeb from A/Core interfaces rather than storing camera UI ownership in A.
+6. Resume CountGD++ from Stage 3 only after explicit user instruction.
 
 ## Definition of done for the next milestone
 

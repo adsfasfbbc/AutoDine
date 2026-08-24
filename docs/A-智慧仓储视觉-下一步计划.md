@@ -1,38 +1,32 @@
 # A：智慧仓储视觉下一步计划
 
-## 当前执行顺序
+## 当前基线
 
-1. 先交付真实 YOLO 版本：水果检测计数、质量分类、防盗、Core 事件和 Windows 运行说明。
-2. YOLO 版本通过测试后，再尝试 CountGD++ 的 WSL2/Docker/CUDA 兼容性验证。
-3. CountGD++ 若失败，保存原始错误、分析原因并写入 README；运行时继续使用真实 YOLO，Mock 只做测试。
+- YOLO26水果检测/当前视野计数、整果品质分类、人员检测和Jupyter实时画面已形成可运行原型。
+- Orin + USB摄像头已真实验证人员框、标签、当前人数、CUDA推理和停止释放；没有使用Mock。
+- 缺陷能力按本阶段验收保持整果 `good/defective/review` 分类，不继续改成病斑框/分割；真正缺陷区域定位作为以后可选增强。
+- 未授权进入规则与Core告警联动已通过测试，但门开/授权仍是演示输入，尚未接D模块真实门磁/门锁与Core授权窗口。
+- CountGD++目标PyTorch 2.7.1/cu128镜像已pull；Stage 3及后续按用户要求暂停。运行时继续使用真实YOLO，不回落到Mock。
 
-## YOLO 版本下一阶段
+## 建议下一步执行顺序
 
-1. 用现场固定机位采集水果/食物图片，按拍摄批次划分训练、验证、测试集，避免相邻帧泄漏。
-2. 为每个原料定义“一个检测目标对应多少克/毫升/个”的标定；不能从框大小猜重量。
-3. 扩展自定义 YOLO 检测数据，使柠檬、番茄、草莓等非 COCO 类别也可定位并逐个计数。
-4. 把 FRUIT-16K 预训练的质量分类器用现场样本微调；低置信度结果进入 `review`，不自动报废。
-5. 建议验收门槛：计数 MAE ≤ 1 个/画面，质量分类宏平均 F1 ≥ 0.85，并单独报告每类结果。
+1. **摄像头水果现场验收。** 使用真实苹果、香蕉、橙子分别记录框、当前数量、`good/defective/review`、置信度、FPS、误检和漏检；按拍摄批次保存少量有标签样本，不能用相邻帧随机拆分训练/测试。
+2. **把摄像头观察接入A事件出口。** 对多帧结果做稳定窗口/节流后，再调用现有 `SmartStoragePipeline → ADP → Core`；不能每一帧都写库存或产生重复告警，也不能上传原始画面。
+3. **完成真实防盗输入。** 与D模块约定门磁/门锁设备ID、门开事件和时间戳，与Core约定授权任务窗口；用真实输入替换 `--door-open`、`--authorized`，再完成“门区有人 + 门开 + 无授权 → Core告警”的端到端验收。
+4. **累计计数增强。** 需要累计通过量时增加YOLO Tracking、轨迹ID、越线规则和跨帧去重；在此之前接口只报告当前视野数量。
+5. **扩展原料与标定。** 为检测目标到 `pcs/g/ml` 的换算建立显式标定，扩展非COCO原料自定义检测数据；不得通过框大小猜重量。
+6. **正式UI。** 由F模块消费A/Core接口展示摄像头状态、计数、品质提醒和告警；A保留Notebook作为调试/验收入口，不自行替代最终前端。
+7. **CountGD++以后恢复。** 仅在用户明确指令后从Stage 3继续验证torch 2.7.1、CUDA 12.8、sm_120和CUDA tensor，再依次处理GroundingDINO、Detectron2、checkpoint、最小推理与A适配。
 
-## 硬件与防盗联调
+建议现场验收门槛：当前视野计数MAE ≤ 1个/画面，整果品质分类宏平均F1 ≥ 0.85，并单独报告每类和每次拍摄会话结果。FRUIT-16K原始拆分存在重复泄漏，不能把原始接近100%的指标作为现场验收依据。
 
-1. 从 D 模块取得 RTSP、门磁/门锁、设备 ID 和授权事件格式；凭据只用环境变量或本地配置，不提交 Git。
-2. 配置归一化门区 ROI，并用 YOLO track 的轨迹 ID 判断跨门线，避免同一人在多帧重复报警。
-3. 用 D/Core 的真实门状态与授权窗口替代演示参数 `--door-open`、`--authorized`。
-4. Zeuslap 若是普通显示器，使用 HDMI 展示 F 模块页面；A 只提供状态/API，不虚构板卡控制协议。
+## 接口与安全计划
 
-## CountGD++ 验证
+1. JupyterLab只在可信局域网/VPN/SSH隧道内使用并启用token/密码，不公开暴露8888端口。
+2. RTSP、Core和设备凭据只通过环境变量或未跟踪本地配置提供；Notebook提交前清空输出，避免人员画面和内网地址进入Git。
+3. 当前A到Core的HTTP发布器没有认证/TLS配置，只用于本地原型。跨主机部署前由C/D确定认证网关或mTLS、来源限制、速率限制和重放防护。
+4. A只发布观察事件；Core拥有库存、授权与告警业务真值，D拥有门锁/传感器控制，F拥有正式UI。A不直接开放门锁控制接口。
 
-1. 用户先在 WSL2 Ubuntu 手动完成 `docker pull pytorch/pytorch:2.7.1-cuda12.8-cudnn9-devel`，保留成功 digest；当前不要 prune。
-2. 从 Stage 3 继续，验证 torch 2.7.1、torchvision、CUDA 12.8、capability 12.0、`sm_120` arch list 与 CUDA tensor 运算。
-3. 确认镜像内 `nvcc` 为 CUDA 12.8，并固定 GCC/G++；随后才创建 Docker 专用 requirements，禁止 torch/torchvision 被官方旧 requirements 降级。
-4. 固定 CountGD++ 官方源码提交，先编译并运行 GroundingDINO CUDA ops 测试，再安装并 import Detectron2。
-5. 下载 BERT 与约 1.25 GB CountGD++ checkpoint，记录来源、版本与哈希，完成真实水果图片最小推理。
-6. 推理成功后实现 A 后端适配：CountGD++ 返回水果实例框与计数；已有 YOLO 缺陷分类器处理每个框，YOLO 人员模型继续负责防盗；输出进入 `SmartStoragePipeline → ADP → Core`。
-7. 对 OmniCount 水果子集和现场图片记录 MAE、延迟、显存、失败样例；若失败，按 CUDA 架构、PyTorch ABI、Detectron2/自定义算子、权重加载分类并保留完整日志。
+## Git与组员协作
 
-CountGD++ 不可用时，运行后端保持真实 YOLO，不回落到 Mock。Mock 只用于协议和业务规则回归。
-
-## Git 与组员协作
-
-每次工作先 `git fetch origin`，确认最新远端；只追加自己的 A 提交。普通 push 被拒绝时停止并报告，绝不 force push，绝不改写、删除、压缩、覆盖或重排组员在远端的提交。
+每次工作先 `git fetch origin`，确认最新远端；只追加自己的A提交。普通push被拒绝时停止并报告，绝不force push，绝不改写、删除、压缩、覆盖或重排组员在远端的提交。模型、数据集、wheel、摄像头画面、skill、`MISSION.md`和本地交付压缩包均不上传GitHub。

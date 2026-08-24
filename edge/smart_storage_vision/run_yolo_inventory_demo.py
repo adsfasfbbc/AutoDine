@@ -19,7 +19,7 @@ from smart_storage_vision.publishers import publish_to_core, write_events
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run real YOLO fruit counting and quality inference")
     parser.add_argument("source", type=Path)
-    parser.add_argument("--detector", default="yolo11n.pt")
+    parser.add_argument("--detector", default="yolo26n.pt")
     parser.add_argument("--quality-model", help="Trained YOLO classification checkpoint; omitted means review, not good")
     parser.add_argument("--location-id", default="storage-main")
     parser.add_argument("--quantity-per-object", type=Decimal, default=Decimal("1"))

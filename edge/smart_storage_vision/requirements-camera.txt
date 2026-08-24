@@ -1,0 +1,5 @@
+# Install a hardware-compatible PyTorch build first; this file intentionally does not replace it.
+ultralytics==8.4.123
+opencv-python-headless>=4.8,<5
+ipywidgets>=8.1,<9
+ipython>=8,<10

@@ -1,6 +1,6 @@
 # CountGD++ GPU Docker 部署档案
 
-> 状态：暂停，尚未部署成功。当前只通过 Stage 1 和 Stage 2；不要把本文件当作成功证明。
+> 状态：暂停，尚未部署成功。Stage 1、Stage 2和目标Stage 3镜像pull已完成；容器内Stage 3验证及CountGD++安装/推理均未执行。不要把“镜像已下载”当作部署成功证明。
 
 ## 目标与项目边界
 
@@ -19,6 +19,9 @@
 | Stage 2 image | `nvidia/cuda:12.8.1-base-ubuntu22.04` |
 | Stage 2 image digest | `sha256:001469ea0f3dec85a1ca929aeea3b58ae369d4c11228b10aec1f642bb6ca7a6f` |
 | 目标 Stage 3 image | `pytorch/pytorch:2.7.1-cuda12.8-cudnn9-devel` |
+| Stage 3 image digest | `sha256:3d614dfd422b7e43647491cbf07d6acc516c032fc49c594a94afdebd52552fb9` |
+| Stage 3 image ID | `sha256:3d614dfd422b7e43647491cbf07d6acc516c032fc49c594a94afdebd52552fb9` |
+| Stage 3 image local size | `9,356,854,547` bytes |
 | CountGD++ 源码提交 | `8489f836d75eb407ae778c56cff1f72cc6f8baae` |
 
 容器内 Python、torch、torchvision、`torch.version.cuda`、nvcc、GCC/G++ 尚未验证，不能填写推测值。
@@ -27,7 +30,7 @@
 
 1. WSL2 GPU：通过。看到 RTX 5080 与 capability 12.0。
 2. Docker GPU passthrough：通过。CUDA 12.8 base 容器看到同一 GPU。
-3. PyTorch 2.7.1/cu128/sm_120：未执行。目标镜像尚未 pull 成功。
+3. PyTorch 2.7.1/cu128/sm_120：镜像已完整pull并由 `docker image inspect`确认；容器内torch/CUDA/sm_120/CUDA tensor验证按用户要求暂停，尚未执行。
 4. GroundingDINO ops：未开始。
 5. Detectron2 import：未开始。
 6. CountGD++ 核心 import：未开始。
@@ -52,21 +55,21 @@ failed commit on ref "layer-sha256:1953a5f9db288f25e73653c276da7baef424fe5ff5196
 - 原配置备份为 `C:\Users\Dyf\.docker\daemon.json.autodine-backup-20260824`。
 - 重启后 `docker info` 显示 mirrors 为 `[]`。
 - 未运行 `docker system prune`、`docker image prune` 或 builder prune；未删除任何 layer、cache 或镜像。
-- 第二次官方源 pull 已按用户要求主动终止，交由用户手动完成。
+- 第二次官方源 pull 曾按用户要求主动终止，后由用户在WSL2手动完成；未清理已有layer/cache。
 
-## 用户手动恢复
+## 用户手动 pull 结果
 
-在 WSL2 Ubuntu 终端执行：
+用户已在WSL2 Ubuntu终端完成：
 
 ```bash
 docker pull pytorch/pytorch:2.7.1-cuda12.8-cudnn9-devel
 ```
 
-成功后保留最后的 digest 输出，不要 prune。再让 Codex 从 Stage 3 继续。
+本地只读检查确认镜像digest为 `sha256:3d614dfd422b7e43647491cbf07d6acc516c032fc49c594a94afdebd52552fb9`。没有运行任何prune。按用户当前指令，CountGD++工作停在这里，不启动容器、不安装依赖、不下载checkpoint。
 
 ## Stage 3 下一条验证
 
-镜像 pull 成功后运行目标容器，至少打印并断言：
+用户以后明确恢复CountGD++任务后，才运行目标容器并至少打印、断言：
 
 ```text
 torch == 2.7.1
