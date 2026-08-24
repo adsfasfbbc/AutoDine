@@ -5,6 +5,8 @@ import time
 from collections import Counter
 from pathlib import Path
 
+from .backends import quality_status_from_label
+
 
 FRUIT_LABELS = {"apple", "banana", "orange"}
 
@@ -12,16 +14,7 @@ FRUIT_LABELS = {"apple", "banana", "orange"}
 def quality_status(label: str, confidence: float, threshold: float) -> str:
     if confidence < threshold:
         return "review"
-    normalized = label.lower().replace("_", " ").replace("-", " ")
-    if label.lower().startswith("s_"):
-        return "defective"
-    if label.lower().startswith("f_"):
-        return "good"
-    if any(word in normalized for word in ("spoiled", "rotten", "defective", "non fresh")):
-        return "defective"
-    if "fresh" in normalized or "good" in normalized:
-        return "good"
-    return "review"
+    return quality_status_from_label(label)
 
 
 class JupyterCameraSession:

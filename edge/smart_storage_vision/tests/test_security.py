@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 from smart_storage_vision.security import PersonDetection, evaluate_security, make_unauthorized_entry_event
-from smart_storage_vision.backends import UltralyticsFruitBackend
+from smart_storage_vision.backends import quality_status_from_label
 
 
 def test_quality_labels_are_mapped_without_claiming_unknown_as_good() -> None:
-    assert UltralyticsFruitBackend._quality("F_Lemon") == "good"
-    assert UltralyticsFruitBackend._quality("S_Lemon") == "defective"
-    assert UltralyticsFruitBackend._quality("fresh_banana") == "good"
-    assert UltralyticsFruitBackend._quality("spoiled-orange") == "defective"
-    assert UltralyticsFruitBackend._quality("banana") == "review"
+    assert quality_status_from_label("F_Lemon") == "good"
+    assert quality_status_from_label("S_Lemon") == "defective"
+    assert quality_status_from_label("fresh_banana") == "good"
+    assert quality_status_from_label("spoiled-orange") == "defective"
+    assert quality_status_from_label("banana") == "review"
 
 
 def test_person_in_open_door_without_authorization_emits_security_event() -> None:

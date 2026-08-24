@@ -37,6 +37,19 @@ class BackendUnavailableError(RuntimeError):
     pass
 
 
+def quality_status_from_label(label: str) -> str:
+    normalized = label.lower().replace("_", " ").replace("-", " ")
+    if label.lower().startswith("s_"):
+        return "defective"
+    if label.lower().startswith("f_"):
+        return "good"
+    if any(word in normalized for word in ("spoiled", "rotten", "defective", "non fresh")):
+        return "defective"
+    if "fresh" in normalized or "good" in normalized:
+        return "good"
+    return "review"
+
+
 class CountGDPlusPlusBackend:
     """Declared adapter boundary for the separately installed official backend."""
 
@@ -71,19 +84,6 @@ class UltralyticsFruitBackend:
         self.confidence = confidence
         self.device = 0 if torch.cuda.is_available() else "cpu"
 
-    @staticmethod
-    def _quality(label: str) -> str:
-        normalized = label.lower().replace("_", " ").replace("-", " ")
-        if label.lower().startswith("s_"):
-            return "defective"
-        if label.lower().startswith("f_"):
-            return "good"
-        if any(word in normalized for word in ("spoiled", "rotten", "defective", "non fresh")):
-            return "defective"
-        if "fresh" in normalized or "good" in normalized:
-            return "good"
-        return "review"
-
     def detect(self, source: Path) -> Sequence[Detection]:
         result = self.detector.predict(
             source=str(source),
@@ -114,7 +114,7 @@ class UltralyticsFruitBackend:
                     verbose=False,
                 )[0]
                 top1 = int(quality_result.probs.top1)
-                quality_status = self._quality(str(quality_result.names[top1]))
+                quality_status = quality_status_from_label(str(quality_result.names[top1]))
                 quality_confidence = float(quality_result.probs.top1conf.cpu())
             detections.append(
                 Detection(
