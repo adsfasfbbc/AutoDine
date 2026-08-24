@@ -33,7 +33,7 @@ echo [3/3] Starting Agent Hub on http://127.0.0.1:8100 ...
 rem --- LLM driver: Qwen (DashScope, OpenAI-compatible tool-calling). Key below. ---
 set "AGENT_HUB_LLM_DRIVER=openai"
 set "AGENT_HUB_LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1"
-set "AGENT_HUB_LLM_API_KEY=sk-ws-H.EYLPLMY.8R4v.MEQCIHonpSg0wqMosClLIO-lM1jzODTeNyFZ-itwMgB5aLHSAiAUZ_74pm_ujKAuEve1jB5WMsv_TJloBm5sbzEFMUTBMw"
+set "AGENT_HUB_LLM_API_KEY=###########################################
 set "AGENT_HUB_LLM_MODEL=qwen-plus"
 start "AutoDine Agent Hub (8100)" cmd /k "set AGENT_HUB_CORE_BASE_URL=http://127.0.0.1:8000 && %PY% -m uvicorn agent_hub.service:create_app --factory --host 127.0.0.1 --port 8100"
 
