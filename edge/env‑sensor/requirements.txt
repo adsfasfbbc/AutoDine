@@ -1,5 +1,0 @@
-paho-mqtt>=1.6.1
-pyyaml>=6.0
-pyserial>=3.5
-crcmod>=1.7
-python-dotenv>=1.0.0
