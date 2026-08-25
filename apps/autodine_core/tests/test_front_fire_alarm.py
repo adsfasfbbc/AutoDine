@@ -14,6 +14,7 @@ if str(ROOT) not in sys.path:
 
 from autodine_core.main import create_app
 from autodine_core.modules.alarm.models import Alarm
+from autodine_core.modules.device.models import DeviceCommand
 from autodine_core.modules.event.models import EventInbox, EventInboxStatus, EventOutbox
 
 
@@ -21,6 +22,14 @@ def _build_client() -> TestClient:
     app = create_app(database_url="sqlite+pysqlite:///:memory:")
     app.state.metadata.create_all(app.state.engine)
     return TestClient(app)
+
+
+def _register_device(client: TestClient, *, device_id: str, device_type: str, store_id: str = "store-1") -> None:
+    response = client.post(
+        "/api/v1/devices",
+        json={"store_id": store_id, "device_id": device_id, "device_type": device_type},
+    )
+    assert response.status_code == 200
 
 
 def _front_fire_event(*, event_id: str, severity: str = "critical", payload: dict | None = None) -> dict:
@@ -42,6 +51,19 @@ def _front_fire_event(*, event_id: str, severity: str = "critical", payload: dic
             "sensor_state": 1,
             "duration_ms": 2500,
             "zone_id": "hall",
+            "vote_count": 3,
+            "abnormal_channels": ["vision", "flame", "temperature"],
+            "triggered_rule": "vote3",
+            "readings": {
+                "temperature": 62,
+                "humidity": 35,
+                "tvoc": 210,
+                "co2": 900,
+                "pm25": 80,
+                "light": 400,
+                "flame": 1,
+                "vision_conf": 0.91,
+            },
         },
     }
 
@@ -77,6 +99,8 @@ def test_vision_front_fire_opens_alarm_broadcasts_alarm_updated_and_fans_out_web
     assert alarm["source_key"] == "front_fire:evt-front-fire-1"
     assert alarm["status"] == "OPEN"
     assert "flame_dual_confirm" in alarm["message"]
+    assert "rule=vote3" in alarm["message"]
+    assert "votes=3" in alarm["message"]
     assert "confidence=0.91" in alarm["message"]
     assert "sensor_state=1" in alarm["message"]
     assert "duration_ms=2500" in alarm["message"]
@@ -105,6 +129,10 @@ def test_vision_front_fire_rejects_out_of_range_payload_without_inbox_or_outbox_
                 "sensor_state": 1,
                 "duration_ms": 2500,
                 "zone_id": "hall",
+                "vote_count": 2,
+                "abnormal_channels": ["vision", "flame"],
+                "triggered_rule": "vision_flame",
+                "readings": {"flame": 1, "vision_conf": 0.91},
             },
         ),
     )
@@ -116,4 +144,60 @@ def test_vision_front_fire_rejects_out_of_range_payload_without_inbox_or_outbox_
     assert _count_rows(session, EventInbox) == 0
     assert _count_rows(session, EventOutbox) == 0
     assert _count_rows(session, Alarm) == 0
+    session.close()
+
+
+def test_vision_front_fire_powers_off_shutdown_listed_devices() -> None:
+    client = _build_client()
+    _register_device(client, device_id="fan-01", device_type="fan")
+    _register_device(client, device_id="ac-01", device_type="air_conditioner")
+    _register_device(client, device_id="lamp-01", device_type="light")  # not on the shutdown list
+
+    with client.websocket_connect("/ws/stores/store-1") as subscribed:
+        response = client.post(
+            "/api/v1/events",
+            json=_front_fire_event(event_id="evt-front-fire-shutdown"),
+        )
+        assert response.status_code == 200
+        assert response.json()["data"]["status"] == "processed"
+        messages = [subscribed.receive_json() for _ in range(4)]
+
+    by_type = {}
+    for message in messages:
+        by_type.setdefault(message["event_type"], []).append(message)
+    assert set(by_type) == {"alarm.opened", "alarm.updated", "device.command"}
+    commands = by_type["device.command"]
+    assert len(commands) == 2
+    commanded = {c["payload"]["device_id"] for c in commands}
+    assert commanded == {"fan-01", "ac-01"}
+    for command in commands:
+        assert command["payload"]["command_type"] == "power_off"
+        assert command["payload"]["parameters"]["source_event_id"] == "evt-front-fire-shutdown"
+
+    session = client.app.state.session_factory()
+    rows = session.scalars(select(DeviceCommand)).all()
+    assert len(rows) == 2
+    assert {row.device_id for row in rows} == {"fan-01", "ac-01"}
+    assert all(row.command_type == "power_off" for row in rows)
+    session.close()
+
+
+def test_vision_front_fire_without_matching_devices_only_opens_alarm() -> None:
+    client = _build_client()
+    _register_device(client, device_id="lamp-01", device_type="light")  # no fan/AC registered
+
+    with client.websocket_connect("/ws/stores/store-1") as subscribed:
+        response = client.post(
+            "/api/v1/events",
+            json=_front_fire_event(event_id="evt-front-fire-no-device"),
+        )
+        assert response.status_code == 200
+        assert response.json()["data"]["status"] == "processed"
+        messages = [subscribed.receive_json(), subscribed.receive_json()]
+
+    assert {m["event_type"] for m in messages} == {"alarm.opened", "alarm.updated"}
+
+    session = client.app.state.session_factory()
+    assert _count_rows(session, DeviceCommand) == 0
+    assert _count_rows(session, Alarm) == 1
     session.close()

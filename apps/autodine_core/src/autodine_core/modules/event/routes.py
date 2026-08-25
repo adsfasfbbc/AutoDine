@@ -41,7 +41,11 @@ def ingest_event(
         )
 
     try:
-        result = process_event(session, envelope)
+        result = process_event(
+            session,
+            envelope,
+            fire_shutdown_device_types=request.app.state.settings.fire_shutdown_device_types,
+        )
     except EventProcessingError as exc:
         session.rollback()
         return JSONResponse(

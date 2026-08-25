@@ -278,7 +278,12 @@ def _handle_quality_abnormal(
     )
 
 
-def process_event(session: Session, envelope: AdpEventEnvelopeSchema) -> Dict[str, Any]:
+def process_event(
+    session: Session,
+    envelope: AdpEventEnvelopeSchema,
+    *,
+    fire_shutdown_device_types: Optional[List[str]] = None,
+) -> Dict[str, Any]:
     try:
         if session.get(EventInbox, envelope.event_id) is not None:
             session.rollback()
@@ -410,6 +415,7 @@ def process_event(session: Session, envelope: AdpEventEnvelopeSchema) -> Dict[st
 
         if envelope.event_type == "vision.front.fire":
             from autodine_core.modules.alarm.service import open_alarm
+            from autodine_core.modules.device.service import create_fire_shutdown_commands
 
             payload = envelope.payload
             session.add(_build_inbox_record(envelope, status=EventInboxStatus.PROCESSED))
@@ -420,6 +426,9 @@ def process_event(session: Session, envelope: AdpEventEnvelopeSchema) -> Dict[st
                 severity=envelope.severity,
                 message=(
                     f"front fire {payload['event_subtype']}: "
+                    f"rule={payload['triggered_rule']} "
+                    f"votes={payload['vote_count']} "
+                    f"channels={','.join(payload['abnormal_channels'])} "
                     f"confidence={payload['confidence']:.2f} "
                     f"vision_conf={payload['vision_conf']:.2f} "
                     f"sensor_state={payload['sensor_state']} "
@@ -436,6 +445,14 @@ def process_event(session: Session, envelope: AdpEventEnvelopeSchema) -> Dict[st
                 payload=alarm,
             )
             session.commit()
+            # Device linkage: power off fans/air conditioners etc. registered
+            # for this store. No matching devices is a log line, not an error.
+            create_fire_shutdown_commands(
+                session,
+                store_id=envelope.store_id,
+                device_types=fire_shutdown_device_types,
+                source_event_id=envelope.event_id,
+            )
             return {"status": "processed", "event_id": envelope.event_id}
 
         session.add(_build_inbox_record(envelope, status=EventInboxStatus.IGNORED))

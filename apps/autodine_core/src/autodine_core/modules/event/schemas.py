@@ -100,6 +100,24 @@ class VisionFrontSafetyPayloadSchema(BaseModel):
     zone_id: str = Field(min_length=1)
 
 
+class VisionFrontFireReadingsSchema(BaseModel):
+    """Snapshot of every channel's raw reading at trigger time (None = unread)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    temperature: Optional[float] = None
+    humidity: Optional[float] = None
+    tvoc: Optional[float] = None
+    co2: Optional[float] = None
+    pm25: Optional[float] = None
+    light: Optional[float] = None
+    flame: Optional[float] = None
+    vision_conf: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
+FRONT_FIRE_CHANNELS = ("vision", "flame", "temperature", "humidity", "tvoc", "co2", "pm25", "light")
+
+
 class VisionFrontFirePayloadSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -109,6 +127,12 @@ class VisionFrontFirePayloadSchema(BaseModel):
     sensor_state: int = Field(ge=0)
     duration_ms: int = Field(ge=0)
     zone_id: str = Field(min_length=1)
+    # 8-channel voting result: rule A = >=3 channels abnormal ("vote3"),
+    # rule B = flame vision AND flame sensor ("vision_flame").
+    vote_count: int = Field(ge=0, le=len(FRONT_FIRE_CHANNELS))
+    abnormal_channels: List[Literal["vision", "flame", "temperature", "humidity", "tvoc", "co2", "pm25", "light"]]
+    triggered_rule: Literal["vote3", "vision_flame"]
+    readings: VisionFrontFireReadingsSchema
 
 
 class QueueUpdatedPayloadSchema(BaseModel):

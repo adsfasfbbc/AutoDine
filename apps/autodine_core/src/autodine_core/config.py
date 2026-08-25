@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     # store, which matches the seeded catalog. The store_id fields stay in the
     # REST/ADP protocols as the multi-store reservation.
     default_store_id: str = "store-main"
+    # Registered devices of these types are powered off on a confirmed
+    # vision.front.fire event. Override with a JSON list, e.g.
+    # AUTODINE_CORE_FIRE_SHUTDOWN_DEVICE_TYPES='["fan"]'.
+    fire_shutdown_device_types: list[str] = Field(
+        default_factory=lambda: ["fan", "air_conditioner"]
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="AUTODINE_CORE_",

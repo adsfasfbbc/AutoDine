@@ -8,11 +8,26 @@ from sqlalchemy.orm import Session
 from autodine_core.dependencies import get_db_session
 from autodine_core.infrastructure.event_bus import dispatch_app_outbox
 from autodine_core.modules import response_envelope
-from autodine_core.modules.device.schemas import DeviceCommandCreate
-from autodine_core.modules.device.service import create_command, list_commands
+from autodine_core.modules.device.schemas import DeviceCommandCreate, DeviceRegister
+from autodine_core.modules.device.service import create_command, list_commands, register_device
 
 
 router = APIRouter(prefix="/api/v1/devices", tags=["device"])
+
+
+@router.post("")
+def post_device(
+    request: DeviceRegister,
+    session: Session = Depends(get_db_session),
+) -> Dict[str, Any]:
+    return response_envelope(
+        register_device(
+            session,
+            store_id=request.store_id,
+            device_id=request.device_id,
+            device_type=request.device_type,
+        )
+    )
 
 
 @router.post("/{device_id}/commands")

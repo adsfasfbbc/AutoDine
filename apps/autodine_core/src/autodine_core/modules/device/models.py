@@ -22,6 +22,21 @@ class DeviceCommandStatus(str, Enum):
     TIMED_OUT = "TIMED_OUT"
 
 
+class Device(Base):
+    """Registered controllable device of a store (fan, air conditioner, ...).
+
+    The registry is what fire-alarm device linkage queries: only devices whose
+    device_type is on the configured shutdown list receive power_off commands.
+    """
+
+    __tablename__ = "devices"
+
+    device_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    store_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    device_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now)
+
+
 class DeviceCommand(Base):
     __tablename__ = "device_commands"
 
