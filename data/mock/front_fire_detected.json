@@ -14,6 +14,19 @@
     "vision_conf": 0.87,
     "sensor_state": 1,
     "duration_ms": 0,
-    "zone_id": "front-hall"
+    "zone_id": "front-hall",
+    "vote_count": 4,
+    "abnormal_channels": ["vision", "flame", "temperature", "pm25"],
+    "triggered_rule": "vote3",
+    "readings": {
+      "temperature": 58,
+      "humidity": 30,
+      "tvoc": 420,
+      "co2": 1100,
+      "pm25": 220,
+      "light": 500,
+      "flame": 1,
+      "vision_conf": 0.87
+    }
   }
 }
