@@ -102,9 +102,10 @@ class FrontVisionConfig:
     # Inject a deterministic dual-modality pattern for demos (--simulate-safety).
     simulate_safety: bool = False
 
-    # Fire detection (YOLO flame vision + Modbus flame sensor fusion).
-    # A vision.front.fire event is published only when BOTH channels fire
-    # within a ±3s window; single-channel cues are debug-logged only.
+    # Fire detection: 8-channel voting over flame vision + one Modbus
+    # environmental sensor slave (temperature/humidity/TVOC/CO2/PM2.5/light/flame).
+    # Rule A: >= fire_vote_threshold channels abnormal at once; rule B: flame
+    # vision AND flame sensor co-occur within a ±3s window.
     fire_enabled: bool = field(default_factory=lambda: _bool_env("FV_FIRE_ENABLED", True))
     fire_zone_id: str = field(default_factory=lambda: os.getenv("FV_FIRE_ZONE_ID", "front-hall"))
     fire_model_path: str = field(
@@ -114,8 +115,8 @@ class FrontVisionConfig:
     # Flame inference is throttled again on top of FV_INFER_EVERY_N_FRAMES:
     # the model runs on every Nth pipeline inference frame.
     fire_infer_every_n_frames: int = field(default_factory=lambda: _int_env("FV_FIRE_INFER_EVERY_N_FRAMES", 5))
-    # Modbus flame sensor channel (pyserial); a port that fails to open only
-    # disables this channel ("sensor never fires"), never crashes the service.
+    # Modbus environmental sensor slave (pyserial); a port that fails to open
+    # only disables the sensor channels ("all None readings"), never crashes.
     fire_sensor_enabled: bool = field(default_factory=lambda: _bool_env("FV_FIRE_SENSOR_ENABLED", True))
     # Empty = platform default (COM3 on Windows, /dev/ttyUSB0 on Linux).
     fire_sensor_port: str = field(default_factory=lambda: os.getenv("FV_FIRE_SENSOR_PORT", ""))
@@ -126,6 +127,18 @@ class FrontVisionConfig:
     fire_fusion_window_seconds: float = field(default_factory=lambda: _float_env("FV_FIRE_FUSION_WINDOW_S", 3.0))
     fire_cooldown_seconds: float = field(default_factory=lambda: _float_env("FV_FIRE_COOLDOWN_S", 30.0))
     fire_critical_after_seconds: float = field(default_factory=lambda: _float_env("FV_FIRE_CRITICAL_AFTER_S", 10.0))
+    # Rule A voting thresholds. The defaults below are starting points only and
+    # MUST be calibrated on site (see README 阈值表).
+    fire_vote_threshold: int = field(default_factory=lambda: _int_env("FV_FIRE_VOTE_THRESHOLD", 3))
+    # Abnormal when temperature > threshold (°C).
+    fire_temp_threshold: float = field(default_factory=lambda: _float_env("FV_FIRE_TEMP_THRESHOLD_C", 45.0))
+    # Abnormal when humidity < threshold (%RH).
+    fire_humidity_threshold: float = field(default_factory=lambda: _float_env("FV_FIRE_HUMIDITY_THRESHOLD_RH", 20.0))
+    # Abnormal when the reading exceeds the threshold.
+    fire_tvoc_threshold: float = field(default_factory=lambda: _float_env("FV_FIRE_TVOC_THRESHOLD_PPB", 600.0))
+    fire_co2_threshold: float = field(default_factory=lambda: _float_env("FV_FIRE_CO2_THRESHOLD_PPM", 1500.0))
+    fire_pm25_threshold: float = field(default_factory=lambda: _float_env("FV_FIRE_PM25_THRESHOLD", 150.0))
+    fire_light_threshold: float = field(default_factory=lambda: _float_env("FV_FIRE_LIGHT_THRESHOLD", 1000.0))
     # Inject a deterministic dual-channel pattern for demos (--simulate-fire).
     simulate_fire: bool = False
 

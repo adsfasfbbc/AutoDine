@@ -1,7 +1,7 @@
 # front_vision (M02)
 
 AutoDine 前厅边缘视觉服务：摄像头采集 → YOLO 人数计数（`queue.updated`）+
-冲突检测（`vision.front.safety`）+ 火焰双确认检测（`vision.front.fire`），
+冲突检测（`vision.front.safety`）+ 火灾多通道投票检测（`vision.front.fire`），
 事件以 ADP v1.0 协议发布到 Core 中台。
 因隐私考虑已移除表情识别，CX 体验指标改由排队/等待时长等非生物特征数据替代。
 
@@ -48,9 +48,10 @@ cd edge/front_vision
 CLI 参数：`--source`、`--camera-index`、`--core-url`、`--store-id`、`--device-id`、
 `--host`、`--port`（默认 5060，启动时检测占用）、`--backend auto|torch`、`--no-preview`、`--log-level`、
 `--no-audio`（关闭声学通道，纯视觉按融合规则不上报）、`--simulate-safety`（注入合成双模态信号做演示）、
-`--no-fire`（整体关闭火焰检测）、`--no-fire-sensor`（关闭火焰传感器通道，纯视觉按融合规则不上报）、
-`--fire-port`（火焰传感器串口，默认 Windows `COM3` / Linux `/dev/ttyUSB0`）、
-`--fire-model`（火焰模型路径，默认 `models/fire.pt`）、`--simulate-fire`（注入合成双通道火焰信号做演示）。
+`--no-fire`（整体关闭火灾检测）、`--no-fire-sensor`（关闭环境传感器通道，仅剩视觉一路投票）、
+`--fire-port`（传感器串口，默认 Windows `COM3` / Linux `/dev/ttyUSB0`）、
+`--fire-model`（火焰模型路径，默认 `models/fire.pt`）、`--simulate-fire`（注入合成双通道火焰信号做演示）、
+`--fire-vote-threshold`（规则 A 触发所需异常路数，默认 3）。
 
 ## 桌面 GUI 预览（--gui）
 
@@ -88,26 +89,65 @@ QTimer ~30ms 刷新），右侧面板显示当前人数、检测后端、推理 
 **隐私设计**：音频只提物理特征，原始 PCM 只留 2s 内存环形缓冲、提完即弃、不落盘、不做 ASR；
 视觉只用骨骼关键点轨迹，不存图像；双模态不同时成立不上报。
 
-## 火焰双确认检测（flame vision + 火焰传感器融合）
+## 火灾多通道投票检测（8 路：火焰视觉 + 环境传感器）
 
-**融合规则**：YOLO 火焰视觉检测与 Modbus 火焰传感器必须在 ±3s 时间窗内同时判定有火，才发布
-`vision.front.fire`；单通道只记 debug 日志，绝不上报。severity 默认 `warning`，
-持续 >10s 或冷却期内重复触发升 `critical`；30s 冷却去重。
+**判定规则**：8 路通道（火焰视觉、火焰传感器、温度、湿度、TVOC、CO2、PM2.5、光照）各自给出
+异常布尔 + 原始读数，满足任一规则即发布 `vision.front.fire`：
+
+- **规则 A（`vote3`）**：≥ `FV_FIRE_VOTE_THRESHOLD`（默认 3）路同时异常 → 判定火灾；
+- **规则 B（`vision_flame`）**：火焰视觉与火焰传感器在 ±3s 时间窗内同时检出 → 判定火灾
+  （沿用原有双确认）。
+
+单路/双路异常只记 debug 日志，绝不上报。severity 默认 `warning`，持续 >10s 或冷却期内重复触发
+升 `critical`；30s 冷却去重。未读到的通道（串口失败/寄存器超时，读数为 None）按正常计。
 
 - 视觉（`fire_vision.py`）：单类别火焰检测模型 `models/fire.pt`（训练见 `scripts/train_fire.py`），
   torch 优先、onnxruntime 兜底（`models/fire.onnx`）；火焰推理在 `FV_INFER_EVERY_N_FRAMES`
   之上再按 `FV_FIRE_INFER_EVERY_N_FRAMES` 节流（中间帧复用上次结果）。检出框最高置信度即 `vision_conf`。
-- 传感器（`fire_sensor.py`）：pyserial 后台线程每 0.1s 发送 Modbus 查询指令
-  `02 03 00 07 00 01 35 F8`（从站 0x02、功能码 0x03、寄存器 0x0007、数量 1、CRC 0x35F8），
-  读 7 字节应答，取 hex 第 6:10 位转 int，`==1` 表示传感器检出火焰。串口打开失败只记 warning
-  并降级为"传感器不检出"，服务不中断（按 AND 规则不再上报）。
-- 融合（`fire_fusion.py`）：双通道 AND + 冷却 + 升级，经 adp.py 发布，payload：
-  `{event_subtype: "flame_dual_confirm", confidence, vision_conf, sensor_state, duration_ms, zone_id}`。
-- 触发时 GUI 与网页调试页显示红色告警横幅（与冲突告警并列，数秒后自动隐藏）。
+- 环境传感器（`env_sensor.py`）：pyserial 后台线程按 `FV_FIRE_SENSOR_POLL_S` 间隔轮询**同一台**
+  Modbus-RTU 从机（地址 0x02，9600 8N1）的 7 个寄存器，查询与应答均带 CRC16 校验，
+  值按有符号 int16 解析（负温度可正确解码）；单寄存器失败该轮记 None，不中断整轮。
+  串口打开失败只记 warning 并降级为"全部通道未读"，服务不中断（仅剩视觉一路投票）。
 
-**传感器接线**：火焰传感器（Modbus RTU，从站地址 0x02）经 USB 转 485/串口模块接入边缘主机，
+  | 寄存器 | 通道 | 单位 |
+  |---|---|---|
+  | 0x0001 | TVOC | ppb |
+  | 0x0002 | 温度（有符号 int16） | ℃ |
+  | 0x0003 | 湿度 | %RH |
+  | 0x0005 | PM2.5 | μg/m³ |
+  | 0x0007 | 火焰（0/1） | — |
+  | 0x0008 | 光照强度 | — |
+  | 0x0009 | CO2 | ppm |
+
+- 融合（`fire_fusion.py`）：规则 A/B 判定 + 冷却 + 升级，经 adp.py 发布，payload：
+  `{event_subtype, confidence, vision_conf, sensor_state, duration_ms, zone_id,
+  vote_count, abnormal_channels, triggered_rule, readings}`，其中 `triggered_rule` 为
+  `"vote3"` 或 `"vision_flame"`，`abnormal_channels` 为异常通道名列表，
+  `readings` 为 8 路当前值快照（未读为 null）。
+- 触发时 GUI 与网页调试页显示红色告警横幅，含触发规则与异常路数（数秒后自动隐藏）。
+
+**异常阈值（默认值仅供起步，必须现场标定）**：
+
+| 通道 | 异常条件 | 配置项 | 默认 |
+|---|---|---|---|
+| 温度 | > 阈值 | `FV_FIRE_TEMP_THRESHOLD_C` | 45 ℃ |
+| 湿度 | < 阈值 | `FV_FIRE_HUMIDITY_THRESHOLD_RH` | 20 %RH |
+| TVOC | > 阈值 | `FV_FIRE_TVOC_THRESHOLD_PPB` | 600 ppb |
+| CO2 | > 阈值 | `FV_FIRE_CO2_THRESHOLD_PPM` | 1500 ppm |
+| PM2.5 | > 阈值 | `FV_FIRE_PM25_THRESHOLD` | 150 μg/m³ |
+| 光照 | > 阈值 | `FV_FIRE_LIGHT_THRESHOLD` | 1000 |
+| 火焰视觉 | 置信度超阈值 | `FV_FIRE_CONFIDENCE` | 0.25 |
+| 火焰传感器 | == 1 | — | — |
+
+**Core 侧联动**：Core 收到 `vision.front.fire` 后除开报警外，会查询该门店已注册设备
+（`POST /api/v1/devices` 注册，`{store_id, device_id, device_type}`），对 `device_type`
+属于关机清单（默认 `fan`、`air_conditioner`，可用 `AUTODINE_CORE_FIRE_SHUTDOWN_DEVICE_TYPES`
+以 JSON 列表覆盖）的设备逐台创建 `power_off` 关机命令（`device.command` 事件经 WebSocket 扇出）。
+门店无匹配设备时只记日志，不报错。
+
+**传感器接线**：环境传感器（Modbus RTU，从站地址 0x02）经 USB 转 485/串口模块接入边缘主机，
 Windows 上设备管理器里对应 `COMx`（用 `--fire-port` 或 `FV_FIRE_SENSOR_PORT` 指定），
-Linux 上通常为 `/dev/ttyUSB0`；9600 8N1。寄存器 0x0007 为火焰状态（1=有火）。
+Linux 上通常为 `/dev/ttyUSB0`；9600 8N1。
 
 ## 配置项（环境变量，前缀 `FV_`）
 
@@ -149,9 +189,16 @@ Linux 上通常为 `/dev/ttyUSB0`；9600 8N1。寄存器 0x0007 为火焰状态�
 | `FV_FIRE_SENSOR_BAUDRATE` | 9600 | 串口波特率 |
 | `FV_FIRE_SENSOR_POLL_S` | 0.1 | Modbus 轮询间隔 |
 | `FV_FIRE_SENSOR_TIMEOUT_S` | 0.5 | 串口读超时 |
-| `FV_FIRE_FUSION_WINDOW_S` | 3 | 双通道 ±3s 融合窗 |
+| `FV_FIRE_FUSION_WINDOW_S` | 3 | 规则 B 双通道 ±3s 融合窗 |
 | `FV_FIRE_COOLDOWN_S` | 30 | 冷却去重 |
 | `FV_FIRE_CRITICAL_AFTER_S` | 10 | 持续升级 critical 阈值 |
+| `FV_FIRE_VOTE_THRESHOLD` | 3 | 规则 A 触发所需异常路数（--fire-vote-threshold） |
+| `FV_FIRE_TEMP_THRESHOLD_C` | 45 | 温度异常阈值（>，℃，需现场标定） |
+| `FV_FIRE_HUMIDITY_THRESHOLD_RH` | 20 | 湿度异常阈值（<，%RH，需现场标定） |
+| `FV_FIRE_TVOC_THRESHOLD_PPB` | 600 | TVOC 异常阈值（>，ppb，需现场标定） |
+| `FV_FIRE_CO2_THRESHOLD_PPM` | 1500 | CO2 异常阈值（>，ppm，需现场标定） |
+| `FV_FIRE_PM25_THRESHOLD` | 150 | PM2.5 异常阈值（>，μg/m³，需现场标定） |
+| `FV_FIRE_LIGHT_THRESHOLD` | 1000 | 光照异常阈值（>，需现场标定） |
 | `FV_PORT` | 5060 | HTTP 服务端口 |
 
 排队 ROI 在 `config.py` 的 `queue_roi`（归一化 x/y/w/h），v1 默认全画面。
@@ -174,7 +221,7 @@ Linux 上通常为 `/dev/ttyUSB0`；9600 8N1。寄存器 0x0007 为火焰状态�
 |---|---|---|---|
 | `queue.updated` | info | `{zone_id, waiting_count}`（estimated_wait_seconds 暂缺省） | 人数变化或每 10s 心跳 |
 | `vision.front.safety` | warning/critical | `{event_subtype, confidence, vision_score, audio_score, duration_ms, zone_id}` | 双模态 ±3s 同时成立；>10s 或冷却期内重触发升 critical |
-| `vision.front.fire` | warning/critical | `{event_subtype, confidence, vision_conf, sensor_state, duration_ms, zone_id}` | 火焰视觉+传感器 ±3s 双确认；>10s 或冷却期内重触发升 critical |
+| `vision.front.fire` | warning/critical | `{event_subtype, confidence, vision_conf, sensor_state, duration_ms, zone_id, vote_count, abnormal_channels, triggered_rule, readings}` | 规则 A：≥3 路异常；规则 B：火焰视觉+传感器 ±3s 双确认；>10s 或冷却期内重触发升 critical |
 
 人数经 3 秒滑动窗口中位数平滑。
 

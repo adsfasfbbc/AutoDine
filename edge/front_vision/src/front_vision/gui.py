@@ -148,9 +148,10 @@ class FrontVisionWindow(QMainWindow):
                 f"(vision={alert['vision_score']}, audio={alert['audio_score']})"
             )
         if fire:
+            channels = ",".join(fire.get("abnormal_channels") or [])
             banners.append(
-                f"🔥 火焰双确认告警 {fire['severity'].upper()} "
-                f"(vision_conf={fire['vision_conf']}, sensor={fire['sensor_state']})"
+                f"🔥 火灾告警 {fire['severity'].upper()} "
+                f"(规则={fire.get('triggered_rule')}, 异常路数={fire.get('vote_count')}/8: {channels})"
             )
         if banners:
             self._banner.setText("  |  ".join(banners))

@@ -69,8 +69,10 @@ async function refresh() {
         + " (vision=" + m.safety_alert.vision_score + ", audio=" + m.safety_alert.audio_score + ")");
     }
     if (m.fire_alert) {
-      alerts.push("🔥 火焰双确认告警 " + m.fire_alert.severity.toUpperCase()
-        + " (vision_conf=" + m.fire_alert.vision_conf + ", sensor=" + m.fire_alert.sensor_state + ")");
+      alerts.push("🔥 火灾告警 " + m.fire_alert.severity.toUpperCase()
+        + " (规则=" + m.fire_alert.triggered_rule
+        + ", 异常路数=" + m.fire_alert.vote_count + "/8: "
+        + (m.fire_alert.abnormal_channels || []).join(",") + ")");
     }
     if (alerts.length) {
       banner.style.display = "block";
@@ -133,11 +135,11 @@ def build_pipeline(
 
 
 def _build_fire_engine(config: FrontVisionConfig, publisher: AdpPublisher):
-    """Wire the flame vision/sensor/fusion fire chain; degrades gracefully.
+    """Wire the flame vision/env-sensor/fusion fire chain; degrades gracefully.
 
-    A missing fire model or an unopenable serial port only disables that
-    channel — the AND fusion then never publishes, per design
-    (single-channel = debug log).
+    A missing fire model or an unopenable serial port only disables those
+    channels — rule B (vision ∧ flame) then never fires, and rule A only
+    fires when the remaining channels still reach the vote threshold.
     """
     if not config.fire_enabled:
         return None
@@ -166,16 +168,16 @@ def _build_fire_engine(config: FrontVisionConfig, publisher: AdpPublisher):
 
     sensor = None
     if config.fire_sensor_enabled:
-        from .fire_sensor import FlameSensorMonitor, default_sensor_port
+        from .env_sensor import EnvSensorMonitor, default_sensor_port
 
-        sensor = FlameSensorMonitor(
+        sensor = EnvSensorMonitor(
             port=config.fire_sensor_port or default_sensor_port(),
             baudrate=config.fire_sensor_baudrate,
             poll_seconds=config.fire_sensor_poll_seconds,
             timeout_seconds=config.fire_sensor_timeout_seconds,
         )
     else:
-        logger.info("fire sensor channel disabled (--no-fire-sensor); vision-only fire cues will not publish")
+        logger.info("env sensor channels disabled (--no-fire-sensor); only the vision channel votes")
 
     return FireEngine(config, publisher, vision_detector=vision, sensor_monitor=sensor)
 

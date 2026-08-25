@@ -3,8 +3,8 @@
 Runs in a background thread: pulls the newest frame from the capture loop,
 counts people (smoothed, published as queue.updated), runs the safety
 fusion engine (vision pose + acoustic arousal -> vision.front.safety) and
-the fire dual-confirmation engine (flame vision + Modbus flame sensor ->
-vision.front.fire).
+the fire multi-channel fusion engine (flame vision + Modbus environmental
+sensor voting -> vision.front.fire).
 """
 from __future__ import annotations
 
@@ -155,7 +155,7 @@ class FrontVisionPipeline:
         if self._safety is not None:
             self._safety.update(frame, now)
 
-        # --- fire fusion (flame vision AND Modbus flame sensor) ------------
+        # --- fire fusion (8-channel voting: flame vision + env sensor) -----
         if self._fire is not None:
             self._fire.update(frame, now)
 
@@ -187,7 +187,9 @@ class FrontVisionPipeline:
         fire = self.fire_alert()
         if fire is not None:
             cv2.putText(
-                annotated, f"FIRE {fire['severity']}", (8, 80),
+                annotated,
+                f"FIRE {fire['severity']} votes={fire.get('vote_count', 0)}/8",
+                (8, 80),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2,
             )
         ok, buf = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 70])

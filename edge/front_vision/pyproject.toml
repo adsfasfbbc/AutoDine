@@ -13,7 +13,7 @@ dependencies = [
     "PySide6>=6.8,<6.9",
     "sounddevice>=0.5",
     "librosa>=0.10",
-    # 火焰传感器 Modbus 串口轮询（fire_sensor.py，懒加载，串口打不开只降级）。
+    # 环境传感器 Modbus 串口轮询（env_sensor.py，懒加载，串口打不开只降级）。
     "pyserial>=3.5",
 ]
 
