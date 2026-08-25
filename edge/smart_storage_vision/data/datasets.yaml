@@ -25,6 +25,30 @@ datasets:
     validation_after_excluding_train_exact_duplicates: {images: 2128, quality_errors: 1, accuracy: 0.9995300752}
     test_after_excluding_train_exact_duplicates: {images: 2134, quality_errors: 0, accuracy: 1.0}
     status: downloaded_and_yolo26_classification_trained_local
+  - id: fruits_detection_v1_local
+    purpose: six_class_fruit_detection_and_current_view_counting
+    source: user_supplied_roboflow_export
+    license: unverified_requires_review_before_redistribution
+    classes: [apple, banana, grape, orange, pineapple, watermelon]
+    split: {train_images: 7108, val_images: 914, test_images: 457}
+    test_boxes: 1636
+    model_family: yolo26n
+    model_sha256: 9A8F8E5CC87C58CF3263FC5D04615126B3B8A41F48BD94988272E4DE908C9100
+    test_metrics: {precision: 0.529, recall: 0.416, map50: 0.418, map50_95: 0.279}
+    status: trained_and_independently_tested_local
+  - id: fruit_quality_v2_local
+    purpose: crop_level_fresh_rotten_classification
+    sources: [fruit_16k, user_supplied_original_image_apple]
+    license: mixed_cc_by_4_0_and_unverified_user_supplied
+    raw_images: 19200
+    unique_exact_sha256_images: 17920
+    removed_exact_duplicates: 1280
+    classes: 26
+    split: {train: 12531, val: 2764, test: 2625, seed: 42}
+    model_family: yolo26n-cls
+    model_sha256: 56356D4FC5A34741F67074E7173DB88F91C6450E0A7F11D8EEC8DB5C4A5E1091
+    test_metrics: {top1: 0.9931428432, top5: 0.9996190667}
+    status: exact_deduplicated_group_split_trained_and_tested_local
   - id: autodine_local_storage_v1
     purpose: camera_domain_validation_and_final_acceptance
     source: team_capture

@@ -60,14 +60,15 @@ subprocess.check_call([
 
 ## 模型文件
 
-交付包显式包含两个运行权重：
+交付包显式包含三个运行权重：
 
 | 文件 | 用途 | SHA-256 |
 | --- | --- | --- |
-| `yolo26n.pt` | 苹果、香蕉、橙子和人员检测 | `9B09CC8BF347F0FC8A5F7657480587F25DB09B34BF33B0652110FB03A8AD4FEF` |
-| `edge/smart_storage_vision/models/fruit_quality_yolo26_best.pt` | 水果框的整果品质分类 | `16EB3FAA08AB65C269D319B1317CA7F2676DC04AB6A622038A22D21A87208D86` |
+| `edge/smart_storage_vision/models/fruit_detector_yolo26n_v1_best.pt` | 苹果、香蕉、葡萄、橙子、菠萝、西瓜检测与当前视野计数 | `9A8F8E5CC87C58CF3263FC5D04615126B3B8A41F48BD94988272E4DE908C9100` |
+| `edge/smart_storage_vision/models/fruit_quality_yolo26_v2_best.pt` | 水果框的整果品质分类 | `56356D4FC5A34741F67074E7173DB88F91C6450E0A7F11D8EEC8DB5C4A5E1091` |
+| `edge/smart_storage_vision/models/person_yolo26n_coco.pt` | COCO人员检测 | `9B09CC8BF347F0FC8A5F7657480587F25DB09B34BF33B0652110FB03A8AD4FEF` |
 
-这两个权重不在 Git 中。第二个模型只输出整果品质类别，不定位病斑、霉斑或破损区域。
+三个权重都不在 Git 中。品质模型只输出整果品质类别，不定位病斑、霉斑或破损区域；菠萝和西瓜当前没有品质类别，因此显示 `review`。
 
 ## 运行与停止
 

@@ -19,7 +19,11 @@ from smart_storage_vision.publishers import publish_to_core, write_events
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run real YOLO fruit counting and quality inference")
     parser.add_argument("source", type=Path)
-    parser.add_argument("--detector", default="yolo26n.pt")
+    parser.add_argument(
+        "--detector",
+        type=Path,
+        default=MODULE_ROOT / "models" / "fruit_detector_yolo26n_v1_best.pt",
+    )
     parser.add_argument("--quality-model", help="Trained YOLO classification checkpoint; omitted means review, not good")
     parser.add_argument("--location-id", default="storage-main")
     parser.add_argument("--quantity-per-object", type=Decimal, default=Decimal("1"))
@@ -29,7 +33,7 @@ def main() -> int:
     args = parser.parse_args()
 
     backend = UltralyticsFruitBackend(
-        args.detector,
+        str(args.detector),
         quality_model_path=args.quality_model,
         location_id=args.location_id,
     )
@@ -37,7 +41,7 @@ def main() -> int:
         backend=backend,
         calibrations=[
             IngredientCalibration(name, args.unit, args.quantity_per_object)
-            for name in ("apple", "banana", "orange")
+            for name in ("apple", "banana", "grape", "orange", "pineapple", "watermelon")
         ],
         store_id="store-main",
         device_id="storage-cam-01",

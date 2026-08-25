@@ -28,7 +28,7 @@ class SecurityObservation:
 class UltralyticsPersonDetector:
     """Runs a real YOLO person-class inference on an image or video frame."""
 
-    def __init__(self, model_path: str = "yolo26n.pt", confidence: float = 0.4) -> None:
+    def __init__(self, model_path: str, confidence: float = 0.4) -> None:
         import torch
         from ultralytics import YOLO
 

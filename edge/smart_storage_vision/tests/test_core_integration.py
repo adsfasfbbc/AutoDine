@@ -8,7 +8,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from smart_storage_vision.backends import MockBackend
+from smart_storage_vision.backends import FRUIT_LABELS, MockBackend
 from smart_storage_vision.models import IngredientCalibration
 from smart_storage_vision.pipeline import SmartStoragePipeline
 
@@ -24,7 +24,7 @@ from autodine_core.main import create_app
 def test_yolo_fruit_ids_match_core_catalog() -> None:
     catalog = json.loads((REPO_ROOT / "data" / "seed" / "catalog.json").read_text(encoding="utf-8"))
     ingredients = {item["ingredient_id"]: item for item in catalog["ingredients"]}
-    for ingredient_id in ("apple", "banana", "orange"):
+    for ingredient_id in FRUIT_LABELS:
         assert ingredients[ingredient_id]["unit"] == "pcs"
 
 

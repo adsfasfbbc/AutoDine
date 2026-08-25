@@ -7,6 +7,9 @@ from typing import Protocol, Sequence
 from .models import Detection
 
 
+FRUIT_LABELS = frozenset({"apple", "banana", "grape", "orange", "pineapple", "watermelon"})
+
+
 class VisionBackend(Protocol):
     name: str
 
@@ -50,6 +53,25 @@ def quality_status_from_label(label: str) -> str:
     return "review"
 
 
+def quality_prediction_for_fruit(
+    probabilities: list[float],
+    names: dict[int, str],
+    detected_fruit: str,
+    threshold: float,
+) -> tuple[str, str, float]:
+    candidates = [
+        (float(probabilities[class_id]), label)
+        for class_id, label in names.items()
+        if label in {f"fresh_{detected_fruit}", f"rotten_{detected_fruit}"}
+    ]
+    if not candidates:
+        return "review", "unsupported", 0.0
+    confidence, label = max(candidates)
+    if confidence < threshold:
+        return "review", label, confidence
+    return quality_status_from_label(label), label, confidence
+
+
 class CountGDPlusPlusBackend:
     """Declared adapter boundary for the separately installed official backend."""
 
@@ -74,6 +96,7 @@ class UltralyticsFruitBackend:
         quality_model_path: str | None = None,
         location_id: str = "storage-main",
         confidence: float = 0.35,
+        quality_confidence: float = 0.7,
     ) -> None:
         import torch
         from ultralytics import YOLO
@@ -82,6 +105,7 @@ class UltralyticsFruitBackend:
         self.quality_model = YOLO(quality_model_path) if quality_model_path else None
         self.location_id = location_id
         self.confidence = confidence
+        self.quality_confidence = quality_confidence
         self.device = 0 if torch.cuda.is_available() else "cpu"
 
     def detect(self, source: Path) -> Sequence[Detection]:
@@ -102,7 +126,7 @@ class UltralyticsFruitBackend:
             result.boxes.conf.cpu().tolist(),
         ):
             detector_label = str(result.names[int(class_id)]).lower()
-            if detector_label not in {"apple", "banana", "orange"}:
+            if detector_label not in FRUIT_LABELS:
                 continue
             x1, y1, x2, y2 = (int(value) for value in box)
             quality_status = "review"
@@ -113,9 +137,12 @@ class UltralyticsFruitBackend:
                     device=self.device,
                     verbose=False,
                 )[0]
-                top1 = int(quality_result.probs.top1)
-                quality_status = quality_status_from_label(str(quality_result.names[top1]))
-                quality_confidence = float(quality_result.probs.top1conf.cpu())
+                quality_status, _quality_label, quality_confidence = quality_prediction_for_fruit(
+                    quality_result.probs.data.cpu().tolist(),
+                    quality_result.names,
+                    detector_label,
+                    self.quality_confidence,
+                )
             detections.append(
                 Detection(
                     ingredient_id=detector_label,

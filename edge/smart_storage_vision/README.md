@@ -6,8 +6,8 @@
 
 | 功能 | 当前实现 | 真实性说明 |
 | --- | --- | --- |
-| 水果计数 | Ultralytics YOLO26n 检测框计数 | 已用 RTX 5080/CUDA 和公共领域水果盘图片运行：苹果 6 框、香蕉 1 框、橙子 7 框；不是 Mock |
-| 缺陷检测 | YOLO26n-cls 水果实例质量分类 | FRUIT-16K 已完成 10 轮本地训练与独立测试；公共领域水果盘输出 1 个 `defective`、3 个 `review`，不是 Mock，但其中可能包含现场域误报 |
+| 水果计数 | 自训练 YOLO26n 六类检测框计数 | Fruits-detection 数据集训练；独立测试 mAP50=0.418、mAP50-95=0.279。支持苹果、香蕉、葡萄、橙子、菠萝、西瓜；不是 Mock |
+| 缺陷检测 | YOLO26n-cls 整果质量分类 | FRUIT-16K 与本地 fresh/rotten apple 合并去重后训练，独立测试 Top-1=99.314%、Top-5=99.962%；只在同种水果标签内判断。菠萝/西瓜无品质类时进入 `review`；不是 Mock |
 | 人员检测 | Ultralytics YOLO26n person 类 | 已在 NVIDIA Orin 的真实 USB 摄像头/JupyterLab 画面中显示人员框、标签和当前人数；不是 Mock |
 | 未授权进门 | 人在门区 + 门已开 + 无授权 | 人体检测是真实模型；演示中的门状态与授权是命令行模拟 |
 | Core 告警 | `vision.storage.security` → Core 告警 → `alarm.updated` | 已通过集成测试 |
@@ -18,7 +18,7 @@
 
 ### “缺陷检测”的准确范围
 
-本版缺陷模型是水果实例级分类：YOLO 检测模型先框出每个水果，第二个 YOLO 分类模型再根据 FRUIT-16K 的 `F_*`（fresh）与 `S_*`（spoiled）标签把该水果判为 `good` 或 `defective`。因此它能回答“这个水果是否腐坏”，并按实例计入 `quality.abnormal`。
+本版缺陷模型是水果实例级分类：YOLO 检测模型先框出每个水果，第二个 YOLO 分类模型再在该水果对应的 `fresh_*` 与 `rotten_*` 两类中判断 `good` 或 `defective`。低置信度、异种主分类以及没有对应品质类的菠萝/西瓜进入 `review`。因此它能回答“这个水果是否疑似腐坏”，并按实例计入 `quality.abnormal`。
 
 它目前不能在水果表面再框出病斑、霉斑或破损的具体位置。原因是 FRUIT-16K 只提供整果鲜/腐类别，没有缺陷区域的边界框或分割掩码。后续需要增加带缺陷框/掩码的公开数据与现场标注，训练 YOLO detection/segmentation 缺陷定位模型；README 不会把实例分类结果冒充缺陷区域定位结果。
 
@@ -26,8 +26,8 @@
 
 `notebooks/camera_realtime_yolo26.ipynb` 在同一摄像头画面中执行：
 
-- YOLO26n 苹果、香蕉、橙子和人员检测；
-- 每个水果框的 YOLO26n-cls 整果品质分类；
+- 独立 YOLO26n 模型分别执行人员检测和六类水果检测；
+- 苹果、香蕉、葡萄、橙子框执行同种约束的 YOLO26n-cls 整果品质分类，菠萝/西瓜进入 `review`；
 - 检测框、原始品质类别、`good/defective/review`、置信度和当前视野计数；
 - Jupyter 页面内 JPEG 画面刷新；
 - 红色停止按钮和代码停止入口，停止时释放摄像头。
@@ -51,7 +51,11 @@ USB 摄像头默认使用编号 `0`，打不开时再确认 `/dev/video*` 并尝
 - A只发布计数、品质和安全观察，不发送原始图像，不拥有库存预留或门锁控制权限。Core负责业务真值与事件校验，HardwareHub负责设备控制。
 - Ultralytics权重/代码和FRUIT-16K数据分别受其上游许可约束；公开或商业部署前需完成依赖与数据许可审查。
 
-本地训练数据为 11,200/2,400/2,400 的训练、验证、测试划分，随机种子为42。YOLO26n-cls第10轮原始验证集top-1为99.958%，原始测试集为100%；但后续哈希审计发现16,000张中只有14,727个不同文件，且有600组完全重复图片跨训练/验证/测试集，所以原始指标受到数据泄漏影响。排除与训练集完全相同的图片后，验证集2,128张中仍有1次品质误判，测试集2,134张中0次；同一受控采集域中还可能存在不同哈希的近重复帧。模型仅作为技术原型，不能把这些数字外推为现场准确率。模型权重位于本地忽略目录，不提交Git。
+六类检测模型使用 Fruits-detection 的现成框标注训练，独立测试集含 457 张图片、1636 个框，Precision=0.529、Recall=0.416、mAP50=0.418、mAP50-95=0.279。该结果可作为技术原型，但召回率仍不足，现场漏检必须继续评估。
+
+六个检测类别均已在 `data/seed/catalog.json` 建立 `pcs` 原料条目，A 生成的 `vision.storage.detected`、`inventory.detected` 与 `quality.abnormal` 事件可由当前 Core 识别。新增目录项只建立库存主数据，不表示这些水果已经进入菜单 BOM。
+
+品质模型使用去除完全重复文件后的 12,531/2,764/2,625 训练、验证、测试划分，共 26 个 fresh/rotten 类。独立测试 Top-1=99.314%、Top-5=99.962%；尽管没有完全相同文件跨划分，公开数据仍可能包含近重复帧和背景捷径，不能把高指标外推为摄像头现场准确率。模型权重位于本地忽略目录，不提交 Git。
 
 ### CountGD++ 当前边界
 
@@ -67,19 +71,19 @@ USB 摄像头默认使用编号 `0`，打不开时再确认 `/dev/video*` 并尝
 在仓库根目录打开 PowerShell。真实 YOLO 水果计数：
 
 ```powershell
-& 'D:\miniconda\Miniconda3\envs\OpenCV\python.exe' edge\smart_storage_vision\run_yolo_inventory_demo.py <水果图片> --detector yolo26n.pt
+& 'D:\miniconda\Miniconda3\envs\OpenCV\python.exe' edge\smart_storage_vision\run_yolo_inventory_demo.py <水果图片> --detector edge\smart_storage_vision\models\fruit_detector_yolo26n_v1_best.pt
 ```
 
 如果没有 `--quality-model`，所有检测目标会明确进入 `review`，不会假装已经完成缺陷检测。训练好质量模型后运行：
 
 ```powershell
-& 'D:\miniconda\Miniconda3\envs\OpenCV\python.exe' edge\smart_storage_vision\run_yolo_inventory_demo.py <水果图片> --detector yolo26n.pt --quality-model edge\smart_storage_vision\output\training\fruit_quality_yolo26\weights\best.pt
+& 'D:\miniconda\Miniconda3\envs\OpenCV\python.exe' edge\smart_storage_vision\run_yolo_inventory_demo.py <水果图片> --detector edge\smart_storage_vision\models\fruit_detector_yolo26n_v1_best.pt --quality-model edge\smart_storage_vision\models\fruit_quality_yolo26_v2_best.pt
 ```
 
 真实 YOLO 防盗演示：
 
 ```powershell
-& 'D:\miniconda\Miniconda3\envs\OpenCV\python.exe' edge\smart_storage_vision\run_security_demo.py <图片> --model yolo26n.pt --door-open --roi 0.2,0.1,0.8,1.0
+& 'D:\miniconda\Miniconda3\envs\OpenCV\python.exe' edge\smart_storage_vision\run_security_demo.py <图片> --model edge\smart_storage_vision\models\person_yolo26n_coco.pt --door-open --roi 0.2,0.1,0.8,1.0
 ```
 
 `--door-open` 和 `--authorized` 是演示状态，不是传感器读数。接入 D 模块后应由门磁/门锁事件和授权服务提供。
@@ -98,7 +102,8 @@ Mock 协议回归与测试：
 - `src/smart_storage_vision/backends.py`：Mock、CountGD++ 边界、真实 YOLO 水果检测/质量分类后端。
 - `src/smart_storage_vision/pipeline.py`：计数、显式数量标定、质量汇总、库存减少判断、ADP 事件。
 - `src/smart_storage_vision/security.py`：真实 YOLO 人体检测与未授权进入规则。
-- `train_quality_yolo.py`：公开水果质量数据的 YOLO 分类训练入口。
+- `train_fruit_detector_yolo.py`：六类水果检测训练与独立测试入口。
+- `train_quality_yolo.py`：去重水果质量数据的 YOLO 分类训练与独立测试入口。
 - `data/datasets.yaml`：数据集来源、许可与当前状态。
 
 详细工作记录和下一步安排见 `docs/A-智慧仓储视觉-工作档案.md` 与 `docs/A-智慧仓储视觉-下一步计划.md`。

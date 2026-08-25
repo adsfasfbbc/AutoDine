@@ -5,10 +5,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
-from .backends import quality_status_from_label
-
-
-FRUIT_LABELS = {"apple", "banana", "orange"}
+from .backends import FRUIT_LABELS, quality_prediction_for_fruit, quality_status_from_label
 
 
 def quality_status(label: str, confidence: float, threshold: float) -> str:
@@ -23,7 +20,8 @@ class JupyterCameraSession:
     def __init__(
         self,
         *,
-        detector_path: str | Path,
+        fruit_detector_path: str | Path,
+        person_detector_path: str | Path,
         quality_model_path: str | Path,
         camera_source: int | str = 0,
         detection_confidence: float = 0.4,
@@ -33,7 +31,8 @@ class JupyterCameraSession:
         import torch
         from ultralytics import YOLO
 
-        self.detector = YOLO(str(detector_path))
+        self.fruit_detector = YOLO(str(fruit_detector_path))
+        self.person_detector = YOLO(str(person_detector_path))
         self.quality_model = YOLO(str(quality_model_path))
         self.camera_source = camera_source
         self.detection_confidence = detection_confidence
@@ -117,55 +116,68 @@ class JupyterCameraSession:
     def _infer_and_annotate(self, frame):
         import cv2
 
-        result = self.detector.predict(
+        person_result = self.person_detector.predict(
+            source=frame,
+            conf=self.detection_confidence,
+            classes=[0],
+            device=self.device,
+            verbose=False,
+        )[0]
+        fruit_result = self.fruit_detector.predict(
             source=frame,
             conf=self.detection_confidence,
             device=self.device,
             verbose=False,
         )[0]
         counts: Counter[str] = Counter()
-        if result.boxes is not None:
-            for box, class_id, detection_confidence in zip(
-                result.boxes.xyxy.cpu().tolist(),
-                result.boxes.cls.cpu().tolist(),
-                result.boxes.conf.cpu().tolist(),
+        font_scale = max(0.5, min(1.2, frame.shape[1] / 960 * 0.7))
+
+        if person_result.boxes is not None:
+            for box, detection_confidence in zip(
+                person_result.boxes.xyxy.cpu().tolist(),
+                person_result.boxes.conf.cpu().tolist(),
             ):
-                label = str(result.names[int(class_id)]).lower()
-                if label != "person" and label not in FRUIT_LABELS:
+                x1, y1, x2, y2 = self._clip_box(box, frame.shape[1], frame.shape[0])
+                counts["person"] += 1
+                text = f"person {detection_confidence:.2f}"
+                color = (255, 160, 0)
+                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                self._draw_label(frame, text, x1, y1, color, font_scale)
+
+        if fruit_result.boxes is not None:
+            for box, class_id, detection_confidence in zip(
+                fruit_result.boxes.xyxy.cpu().tolist(),
+                fruit_result.boxes.cls.cpu().tolist(),
+                fruit_result.boxes.conf.cpu().tolist(),
+            ):
+                label = str(fruit_result.names[int(class_id)]).lower()
+                if label not in FRUIT_LABELS:
                     continue
                 x1, y1, x2, y2 = self._clip_box(box, frame.shape[1], frame.shape[0])
-                if label == "person":
-                    counts["person"] += 1
-                    text = f"person {detection_confidence:.2f}"
-                    color = (255, 160, 0)
-                else:
-                    crop = frame[y1:y2, x1:x2]
-                    quality_result = self.quality_model.predict(
-                        source=crop,
-                        device=self.device,
-                        verbose=False,
-                    )[0]
-                    top1 = int(quality_result.probs.top1)
-                    raw_quality_label = str(quality_result.names[top1])
-                    quality_confidence = float(quality_result.probs.top1conf.cpu())
-                    status = quality_status(
-                        raw_quality_label,
-                        quality_confidence,
-                        self.quality_confidence,
-                    )
-                    counts[label] += 1
-                    counts[status] += 1
-                    text = (
-                        f"{label} {detection_confidence:.2f} | "
-                        f"{status} {quality_confidence:.2f} ({raw_quality_label})"
-                    )
-                    color = {
-                        "good": (30, 180, 30),
-                        "defective": (20, 20, 230),
-                        "review": (0, 190, 255),
-                    }[status]
+                crop = frame[y1:y2, x1:x2]
+                quality_result = self.quality_model.predict(
+                    source=crop,
+                    device=self.device,
+                    verbose=False,
+                )[0]
+                status, raw_quality_label, quality_confidence = quality_prediction_for_fruit(
+                    quality_result.probs.data.cpu().tolist(),
+                    quality_result.names,
+                    label,
+                    self.quality_confidence,
+                )
+                counts[label] += 1
+                counts[status] += 1
+                text = (
+                    f"{label} {detection_confidence:.2f} | "
+                    f"{status} {quality_confidence:.2f} ({raw_quality_label})"
+                )
+                color = {
+                    "good": (30, 180, 30),
+                    "defective": (20, 20, 230),
+                    "review": (0, 190, 255),
+                }[status]
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                font_scale = max(0.5, min(1.2, frame.shape[1] / 960 * 0.7))
                 self._draw_label(frame, text, x1, y1, color, font_scale)
 
         if frame.shape[1] > self.display_width:
@@ -190,9 +202,9 @@ class JupyterCameraSession:
         cv2.putText(frame, text, (x + 3, y - baseline - 3), font, scale, (255, 255, 255), thickness)
 
     def _status_html(self, counts: Counter[str], fps: float) -> str:
+        fruit_counts = "，".join(f"{label}={counts[label]}" for label in sorted(FRUIT_LABELS))
         return (
-            f"<b>当前视野：</b>person={counts['person']}，apple={counts['apple']}，"
-            f"banana={counts['banana']}，orange={counts['orange']}；"
+            f"<b>当前视野：</b>person={counts['person']}，{fruit_counts}；"
             f"good={counts['good']}，defective={counts['defective']}，review={counts['review']}；"
             f"FPS={fps:.1f}，device={self.device}"
         )
