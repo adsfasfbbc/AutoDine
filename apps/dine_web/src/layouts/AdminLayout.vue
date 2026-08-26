@@ -11,6 +11,7 @@ const role = useRoleStore()
 
 const navItems = [
   { to: '/admin/overview', label: '经营总览', icon: 'chart' },
+  { to: '/admin/agent', label: '管理助手', icon: 'agent' },
   { to: '/admin/orders', label: '订单管理', icon: 'receipt' },
   { to: '/admin/traffic', label: '客流分析', icon: 'users' },
   { to: '/admin/inventory', label: '库存管理', icon: 'box' },

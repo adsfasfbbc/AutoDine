@@ -11,6 +11,7 @@ const role = useRoleStore()
 
 const navItems = [
   { to: '/production/overview', label: '生产总览', icon: 'activity' },
+  { to: '/production/agent', label: '生产助手', icon: 'agent' },
   { to: '/production/tasks', label: '制作任务', icon: 'list' },
   { to: '/production/inventory', label: '库存', icon: 'box' },
   { to: '/production/quality', label: '质检', icon: 'check' },
