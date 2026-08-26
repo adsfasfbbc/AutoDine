@@ -1,0 +1,37 @@
+# dependencies
+node_modules/
+
+# pnpm local cache / store (kept in-workspace for sandboxed environments)
+.pnpm-cache/
+.pnpm-store/
+
+# build output
+dist/
+dist-ssr/
+*.local
+
+# logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# editor / os
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+Thumbs.db
+
+# vite cache
+.vite/
+
+# qa artifacts
+scripts/qa-report.json
+
+# env
+.env.local
+.env.*.local
+
+# temp reference clone (team repo mirror)
+.ref/

@@ -1,0 +1,266 @@
+@import "tailwindcss";
+
+/* ============================================================
+   AutoDine Design Tokens
+   品牌：深海军蓝 + 暖橙；纸张质感暖灰背景；克制版式
+   ============================================================ */
+@theme {
+  /* 品牌蓝（深海军蓝，避免模板化科技蓝） */
+  --color-brand-50: #f1f6fa;
+  --color-brand-100: #e0ebf3;
+  --color-brand-200: #c0d6e6;
+  --color-brand-300: #92b7d1;
+  --color-brand-400: #5d90b5;
+  --color-brand-500: #3b729c;
+  --color-brand-600: #2c5a80;
+  --color-brand-700: #244a6a;
+  --color-brand-800: #1d3c57;
+  --color-brand-900: #14293d;
+  --color-brand-950: #0c1b29;
+
+  /* 品牌橙（暖食橙） */
+  --color-accent-50: #fdf5ec;
+  --color-accent-100: #fae8d3;
+  --color-accent-200: #f3cfa5;
+  --color-accent-300: #ebaf72;
+  --color-accent-400: #e3924a;
+  --color-accent-500: #d97a2e;
+  --color-accent-600: #c1621f;
+  --color-accent-700: #9e4d1a;
+  --color-accent-800: #7d3e1b;
+  --color-accent-900: #653419;
+
+  /* 中性墨色 */
+  --color-ink-300: #9da9b3;
+  --color-ink-400: #7a8894;
+  --color-ink-500: #5c6b78;
+  --color-ink-700: #33424f;
+  --color-ink-900: #17202a;
+
+  /* 表面与线条 */
+  --color-paper: #faf7f2;
+  --color-surface: #ffffff;
+  --color-line: #e9e3d9;
+  --color-line-cool: #e4e9ef;
+
+  /* 语义色 */
+  --color-success-500: #3e8e5f;
+  --color-success-100: #e3f1e8;
+  --color-danger-500: #c4453b;
+  --color-danger-100: #fbeae8;
+  --color-warning-500: #d97706;
+  --color-warning-100: #fdf1dd;
+
+  /* 字体 */
+  --font-sans:
+    -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Noto Sans SC", "Helvetica Neue", Arial, sans-serif;
+  --font-display:
+    "Noto Serif SC", "Songti SC", "STSong", ui-serif, Georgia, "Times New Roman",
+    serif;
+
+  /* 动效节奏 */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --ease-enter: cubic-bezier(0, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ============================================================
+   Base
+   ============================================================ */
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-paper font-sans text-ink-900;
+  }
+
+  ::selection {
+    background: var(--color-accent-200);
+    color: var(--color-brand-950);
+  }
+
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+  }
+
+  /* 桌面端滚动条 */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--color-ink-300) 45%, transparent);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--color-ink-400) 60%, transparent);
+    background-clip: content-box;
+  }
+}
+
+/* ============================================================
+   Components（可复用界面件）
+   ============================================================ */
+@layer components {
+  .card {
+    @apply rounded-2xl border border-line bg-surface;
+    box-shadow: 0 1px 2px rgba(20, 41, 61, 0.04);
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-line bg-surface px-2.5 py-1 text-xs font-medium text-ink-500 transition-colors;
+  }
+  .chip-active {
+    @apply border-brand-900 bg-brand-900 text-white;
+  }
+
+  .btn-accent {
+    @apply inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-full bg-accent-500 px-4 py-2 text-sm font-medium text-white transition-all duration-200;
+  }
+  .btn-accent:hover {
+    @apply bg-accent-600;
+  }
+  .btn-accent:active {
+    transform: scale(0.98);
+  }
+  .btn-accent:disabled {
+    @apply cursor-not-allowed opacity-40;
+  }
+
+  .btn-ghost {
+    @apply inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-full border border-line bg-surface px-4 py-2 text-sm font-medium text-ink-700 transition-colors duration-200;
+  }
+  .btn-ghost:hover {
+    @apply border-brand-300 text-brand-800;
+  }
+
+  .field {
+    @apply w-full rounded-full border border-line bg-surface px-4 py-2 text-sm text-ink-900 placeholder:text-ink-300 transition-colors;
+  }
+  .field:focus {
+    @apply border-brand-500;
+    outline: none;
+  }
+
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-600;
+  }
+}
+
+/* ============================================================
+   动效：仅一个主记忆动效（传菜带入场），其余为短促反馈
+   ============================================================ */
+@keyframes ad-plate {
+  from {
+    opacity: 0;
+    transform: translateX(-56px) rotate(-2deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ad-rise {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ad-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes kiosk-wash {
+  from {
+    opacity: 0;
+    clip-path: circle(0 at 88% 8%);
+  }
+  to {
+    opacity: 1;
+    clip-path: circle(150% at 88% 8%);
+  }
+}
+
+@keyframes kiosk-stamp {
+  0% {
+    transform: scale(0.94);
+  }
+  60% {
+    transform: scale(1.04);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.anim-plate {
+  animation: ad-plate 0.55s var(--ease-spring) both;
+}
+.anim-rise {
+  animation: ad-rise 0.5s var(--ease-standard) both;
+}
+.anim-fade {
+  animation: ad-fade 0.35s var(--ease-standard) both;
+}
+
+.kiosk-enter-wash {
+  animation: kiosk-wash 0.45s var(--ease-enter) both;
+}
+
+.kiosk-stamp:active {
+  animation: kiosk-stamp 0.22s var(--ease-standard);
+}
+
+/* 路由切换：短促淡入 + 轻微上移 */
+.page-enter-active {
+  transition:
+    opacity 0.22s var(--ease-standard),
+    transform 0.22s var(--ease-standard);
+}
+.page-leave-active {
+  transition:
+    opacity 0.14s var(--ease-exit),
+    transform 0.14s var(--ease-exit);
+}
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.page-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+/* 减少动效偏好 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
