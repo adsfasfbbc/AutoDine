@@ -26,19 +26,23 @@ pnpm preview     # 预览构建产物
 | `VITE_USE_MOCK` | `true` | `'false'` 时切换为真实 HTTP/WS 客户端 |
 | `VITE_API_BASE_URL` | `http://localhost:8000` | Core REST 基地址 |
 | `VITE_WS_BASE_URL` | `ws://localhost:8000` | Core WebSocket 基地址 |
+| `VITE_AGENT_USE_MOCK` | `true` | 只读建议端点就绪后，设为 `'false'` 切换 Agent Hub |
+| `VITE_AGENT_BASE_URL` | `/agent-api` | Agent Hub 同源代理前缀 |
 
-## 智能点餐助手现状
+## 三端智能助手现状
 
-- 当前 `/consumer/agent` 是前端本地规则推荐：按预算、热量、过敏原、品类与标签筛选当前菜单，并模拟短暂思考延迟。
+- 当前 `/consumer/agent`、`/production/agent`、`/admin/agent` 分别提供点餐、生产协同与经营决策助手；三者共用 `src/api/agent.ts` 接口，默认使用角色化 Mock。
+- 消费者 Mock 按预算、热量、过敏原、品类与标签筛选当前菜单；生产和管理助手读取页面现有业务接口的关键数据并给出建议，不会自动执行任务流转、库存或告警操作。
 - 当前实现不内嵌、不直连 Codex/OpenAI，也不消耗 Codex、ChatGPT 或 OpenAI API 额度；默认 Mock 部署无需模型服务。
-- 正式智能对话应由浏览器调用团队 `apps/agent_hub`，再由 Agent Hub 读取 Core 菜单/订单接口并选择 scripted 或 OpenAI-compatible 模型驱动。
+- 前端已预留只读契约 `POST /api/v1/advisors/{consumer|kitchen|manager}/chat`；请求为 `message + history`，回复为 `agent + reply`，并可选返回 `suggestions`。该端点需由 Agent Hub 负责人实现并在服务端限制为只读工具后，才能设置 `VITE_AGENT_USE_MOCK=false`。
+- 当前 Agent Hub 的 `/api/v1/agents/{agent}/chat` 含下单、任务流转、告警和设备命令等写工具，前端不会调用该端点，避免“建议助手”意外改变业务状态。
 - 模型 API Key 只能存放在 Agent Hub 的服务端环境或云端密钥管理中，不能使用 `VITE_*` 暴露给浏览器。
 
 ## 部署边界
 
 - 当前团队仓库没有为 Web 定义 Docker 服务或云发布流水线；本模块的交付要求是可独立 `pnpm dev`、`pnpm build` 与本地预览。
 - `dist/` 是静态产物，可部署到支持 SPA 路由回退的静态托管平台；默认 Mock 模式不依赖后端。
-- 启用真实数据时，需要可访问的 Core REST/WebSocket；启用真实智能对话时还需要部署 Agent Hub，并通过同域反向代理或受控 CORS 允许网页访问。
+- 启用真实数据时，需要可访问的 Core REST/WebSocket；启用真实智能建议时还需要部署只读 Agent Hub 端点。开发环境已将 `/agent-api` 代理到 `localhost:8100`，生产环境需配置同路径反向代理。
 
 ## 三端入口
 
@@ -47,8 +51,8 @@ pnpm preview     # 预览构建产物
 | 首页 | `/` | 三端角色入口（传菜带式入场动效） |
 | 消费者端 | `/consumer/*` | 菜单（分类/搜索/热量/过敏原筛选、持久购物车、商品详情）、智能点餐助手（Agent 推荐）、排队、订单状态 |
 | 门店自助点餐 | `/consumer/kiosk` | 从消费者端显式进入的横屏自助模式；与普通页面共享菜单、购物车和订单状态 |
-| 生产端 | `/production/*` | 生产总览、制作任务看板（四状态流转）、库存（67 原料 + 流水）、质检、设备（温控/重启/自检） |
-| 管理端 | `/admin/*` | 经营总览、订单管理（筛选/详情/取消）、客流分析（分时图）、库存管理（损耗/流水）、告警中心、经营分析（分时营收/品类构成） |
+| 生产端 | `/production/*` | 生产总览、生产协同助手、制作任务看板（四状态流转）、库存（67 原料 + 流水）、质检、设备（温控/重启/自检） |
+| 管理端 | `/admin/*` | 经营总览、经营决策助手、订单管理（筛选/详情/取消）、客流分析（分时图）、库存管理（损耗/流水）、告警中心、经营分析（分时营收/品类构成） |
 
 ## 目录结构
 

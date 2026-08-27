@@ -15,6 +15,13 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+    proxy: {
+      '/agent-api': {
+        target: 'http://localhost:8100',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/agent-api/, ''),
+      },
+    },
   },
   build: {
     target: 'es2022',

@@ -61,16 +61,18 @@
 
 ## Agent Hub 接入边界
 
-当前 `AgentView.vue` 使用本地菜单规则，不发起模型请求。团队 Agent Hub 的预期接入方向为：
+三端 Agent 页面默认使用本地 Mock，不发起模型请求。正式接入必须采用服务端强制只读的建议模式：
 
-1. 浏览器请求 Agent Hub 的 `POST /api/v1/agents/consumer/chat`；
+1. 浏览器通过同源 `/agent-api` 代理请求 `POST /api/v1/advisors/{consumer|kitchen|manager}/chat`；
 2. Agent Hub 通过 Core 工具读取菜单、队列、订单等业务真相；
 3. Agent Hub 可使用默认 scripted 驱动，或在服务端配置 OpenAI-compatible 模型；
 4. 前端只接收对话与结构化商品推荐，不持有模型 API Key。
 
-正式接入前仍需完成：Agent Hub 云端部署、同域代理或 CORS、P001 系列新菜单模型同步，以及
-在 `{ agent, reply }` 之外补充可稳定渲染的结构化推荐商品字段。联通验收依次检查 Core `/health`、
-Agent Hub `/health`、`/api/v1/agents` 与 consumer chat；任一步失败时保留本地规则作为降级体验。
+现有 `/api/v1/agents/{agent}/chat` 暴露下单、任务流转、告警和设备命令等写工具，禁止用于这三个
+“只提供建议”的前端页面。正式接入前仍需由 Agent Hub 负责人实现 advisors 端点并限制只读工具，
+完成生产环境同源反向代理、P001 系列新菜单模型同步，并在 `{ agent, reply }` 之外按需提供
+`suggestions`。联通验收依次检查 Core `/health`、Agent Hub `/health` 与 advisors chat；任一步失败时
+保留本地 Mock 作为降级体验。
 
 ## 类型对齐
 

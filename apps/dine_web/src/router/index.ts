@@ -61,6 +61,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '生产总览', role: 'production' },
       },
       {
+        path: 'agent',
+        name: 'production-agent',
+        component: () => import('@/views/production/AgentView.vue'),
+        meta: { title: '生产助手', role: 'production' },
+      },
+      {
         path: 'tasks',
         name: 'production-tasks',
         component: () => import('@/views/production/TasksView.vue'),
@@ -97,6 +103,12 @@ const routes: RouteRecordRaw[] = [
         name: 'admin-overview',
         component: () => import('@/views/admin/OverviewView.vue'),
         meta: { title: '经营总览', role: 'admin' },
+      },
+      {
+        path: 'agent',
+        name: 'admin-agent',
+        component: () => import('@/views/admin/AgentView.vue'),
+        meta: { title: '管理助手', role: 'admin' },
       },
       {
         path: 'orders',

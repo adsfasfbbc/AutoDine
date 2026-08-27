@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "typecheck": "vue-tsc -b",
     "qa": "node scripts/qa-layout.mjs",
-    "qa:flow": "node scripts/qa-flow.mjs"
+    "qa:flow": "node scripts/qa-flow.mjs",
+    "qa:agent": "node scripts/qa-agent.mjs"
   },
   "dependencies": {
     "@fontsource/noto-serif-sc": "^5.2.5",

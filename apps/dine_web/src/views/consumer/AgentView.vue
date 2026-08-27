@@ -2,6 +2,7 @@
 import { useMessage } from 'naive-ui'
 import { nextTick, onMounted, ref } from 'vue'
 
+import { agentApi, agentConnectionLabel } from '@/api/agent'
 import type { Product } from '@/api/types'
 import ProductImage from '@/components/ProductImage.vue'
 import { ALLERGEN_LABELS } from '@/data/products'
@@ -41,69 +42,33 @@ onMounted(() => {
   void scrollToBottom()
 })
 
-function matchBudget(text: string): number | null {
-  const m = text.match(/(\d+)\s*元/)
-  return m ? Number(m[1]) : null
-}
-
-function recommend(text: string): Product[] {
-  const budgetYuan = matchBudget(text)
-  const lowCal = /低卡|低热量|热量低/.test(text)
-  const noMilk = /无乳|不含乳/.test(text)
-  const noEgg = /无蛋/.test(text)
-  const noGluten = /无麸/.test(text)
-  const wantsDrink = /饮品|茶|果茶|饮料/.test(text)
-  const wantsCup = /甜品|杯|奶油杯/.test(text)
-  const wantsCake = /蛋糕|芝士|烘焙/.test(text)
-  const wantsHot = /热食|小吃|炸|薯条|鸡/.test(text)
-  const wantsSignature = /招牌/.test(text)
-
-  const candidates = menu.products.filter((p) => {
-    if (p.status !== 'ON_SALE') return false
-    if (lowCal && p.calories_kcal > 250) return false
-    if (noMilk && p.allergens.includes('MILK')) return false
-    if (noEgg && p.allergens.includes('EGG')) return false
-    if (noGluten && p.allergens.includes('GLUTEN')) return false
-    if (budgetYuan !== null && p.price_cent > budgetYuan * 100) return false
-    if (wantsDrink && p.category !== 'DRINK') return false
-    if (wantsCup && p.category !== 'CUP_DESSERT') return false
-    if (wantsCake && p.category !== 'CAKE') return false
-    if (wantsHot && p.category !== 'HOT_FOOD') return false
-    if (wantsSignature && !p.tags.includes('招牌')) return false
-    return true
-  })
-
-  const sortKey = lowCal ? (p: Product) => p.calories_kcal : (p: Product) => p.price_cent
-  return [...candidates].sort((a, b) => sortKey(a) - sortKey(b)).slice(0, 4)
-}
-
-function buildReply(text: string, picks: Product[]): string {
-  const lines: string[] = []
-  if (picks.length === 0) {
-    return '暂时没有完全符合的在售商品，试试放宽条件，比如去掉过敏原或预算限制？'
-  }
-  lines.push(`为你找到 ${picks.length} 款在售商品：`)
-  if (/低卡|低热量/.test(text)) lines.push('已按热量从低到高排序，都是 250 kcal 以内的轻负担选择。')
-  if (matchBudget(text) !== null) lines.push(`已按预算 ¥${matchBudget(text)} 以内筛选。`)
-  lines.push('点击卡片右下角即可加入购物车。')
-  return lines.join('\n')
-}
-
 async function send(text: string): Promise<void> {
   const trimmed = text.trim()
   if (!trimmed || thinking.value) return
+  const history = messages.value.map((item) => ({ role: item.role, content: item.text }))
   messages.value.push({ role: 'user', text: trimmed })
   input.value = ''
   thinking.value = true
   await scrollToBottom()
 
-  // 模拟 Agent 推理延迟
-  await new Promise((r) => setTimeout(r, 650 + Math.random() * 400))
-
-  const picks = recommend(trimmed)
-  messages.value.push({ role: 'assistant', text: buildReply(trimmed, picks), products: picks })
-  thinking.value = false
-  await scrollToBottom()
+  try {
+    const response = await agentApi.chat('consumer', {
+      message: trimmed,
+      history,
+      context: { products: menu.products },
+    })
+    const productIds = new Set(response.suggestions?.filter((item) => item.kind === 'product').map((item) => item.id))
+    const picks = menu.products.filter((product) => productIds.has(product.product_id))
+    messages.value.push({ role: 'assistant', text: response.reply, products: picks })
+  } catch (error) {
+    messages.value.push({
+      role: 'assistant',
+      text: error instanceof Error ? `助手暂时无法响应：${error.message}` : '助手暂时无法响应，请稍后再试。',
+    })
+  } finally {
+    thinking.value = false
+    await scrollToBottom()
+  }
 }
 
 function addToCart(product: Product): void {
@@ -130,6 +95,7 @@ function addToCart(product: Product): void {
             已连接菜单 · 只推荐在售商品
           </p>
         </div>
+        <span class="ml-auto rounded-full border border-line bg-paper px-3 py-1 text-[11px] font-medium text-ink-500">{{ agentConnectionLabel }}</span>
       </header>
 
       <div ref="listEl" class="flex-1 space-y-4 overflow-y-auto px-6 py-5">
@@ -166,9 +132,9 @@ function addToCart(product: Product): void {
         <div v-if="thinking" class="flex gap-3">
           <span class="grid size-8 shrink-0 place-items-center rounded-full bg-accent-50 text-xs font-semibold text-accent-600">AI</span>
           <div class="flex items-center gap-1.5 rounded-2xl rounded-tl-sm bg-paper px-4 py-3.5">
-            <span class="size-1.5 animate-bounce rounded-full bg-brand-400" />
-            <span class="size-1.5 animate-bounce rounded-full bg-brand-400 [animation-delay:120ms]" />
-            <span class="size-1.5 animate-bounce rounded-full bg-brand-400 [animation-delay:240ms]" />
+            <span class="size-1.5 animate-pulse rounded-full bg-brand-400" />
+            <span class="size-1.5 animate-pulse rounded-full bg-brand-400 [animation-delay:120ms]" />
+            <span class="size-1.5 animate-pulse rounded-full bg-brand-400 [animation-delay:240ms]" />
           </div>
         </div>
       </div>
@@ -180,7 +146,7 @@ function addToCart(product: Product): void {
           </button>
         </div>
         <form class="flex items-center gap-2" @submit.prevent="send(input)">
-          <input v-model="input" type="text" class="field flex-1" placeholder="输入你的口味偏好，例如：来一杯清爽的果茶…" :disabled="thinking" />
+          <input v-model="input" type="text" class="field flex-1" aria-label="向助手提问" placeholder="输入你的口味偏好，例如：来一杯清爽的果茶…" :disabled="thinking" />
           <button class="btn-accent shrink-0" type="submit" :disabled="thinking || !input.trim()">
             <svg viewBox="0 0 24 24" class="size-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M5 12h14M13 6l6 6-6 6" />
@@ -192,7 +158,7 @@ function addToCart(product: Product): void {
     </section>
 
     <!-- 购物车 -->
-    <aside class="sticky top-24 col-span-2">
+    <aside class="sticky top-24 col-span-2" aria-label="点餐上下文">
       <div class="card p-6">
         <h2 class="font-display text-lg font-semibold text-brand-950">已选清单</h2>
         <p class="mt-1 text-xs text-ink-400">助手推荐的商品可直接加入</p>
