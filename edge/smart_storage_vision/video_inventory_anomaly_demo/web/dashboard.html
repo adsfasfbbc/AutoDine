@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>AutoDine 智慧仓储视觉与库存预警</title>
+  <style>
+    :root { color-scheme: dark; --bg:#020d18; --panel:#061b2c; --panel2:#0a2940; --line:rgba(56,205,255,.4); --cyan:#3ddcff; --mint:#48ffc0; --amber:#ffc857; --red:#ff3f64; --text:#edf9ff; --muted:#86aabe; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; color:var(--text); font-family:"Segoe UI","Microsoft YaHei",sans-serif; background:radial-gradient(circle at 50% -20%,rgba(26,137,230,.28),transparent 42%),linear-gradient(rgba(22,87,126,.1) 1px,transparent 1px),linear-gradient(90deg,rgba(22,87,126,.1) 1px,transparent 1px),var(--bg); background-size:auto,32px 32px,32px 32px,auto; }
+    header { height:72px; padding:0 24px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--line); background:linear-gradient(90deg,rgba(4,22,39,.94),rgba(9,61,91,.76),rgba(4,22,39,.94)); }
+    h1 { margin:0; font-size:clamp(19px,2vw,29px); letter-spacing:.1em; }
+    .subtitle { margin-top:4px; color:var(--muted); font-size:11px; letter-spacing:.12em; }
+    .status { display:flex; gap:10px; align-items:center; color:var(--mint); font-size:13px; }
+    .pulse { width:9px; height:9px; border-radius:50%; background:var(--mint); box-shadow:0 0 12px var(--mint); }
+    .layout { padding:14px; min-height:calc(100vh - 72px); display:grid; grid-template-columns:minmax(250px,290px) minmax(560px,1fr) minmax(300px,350px); gap:14px; }
+    .column { min-width:0; display:flex; flex-direction:column; gap:14px; }
+    .panel { position:relative; overflow:hidden; background:linear-gradient(145deg,rgba(6,29,47,.96),rgba(3,17,29,.96)); border:1px solid var(--line); box-shadow:inset 0 0 22px rgba(24,125,180,.08),0 10px 24px rgba(0,0,0,.22); }
+    .panel-title { min-height:43px; padding:0 14px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid rgba(56,205,255,.2); font-weight:700; letter-spacing:.06em; }
+    .panel-title small { color:var(--muted); font-weight:500; letter-spacing:0; }
+    .fruit-list { padding:9px 12px 12px; display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+    .metric { padding:10px; background:rgba(10,43,67,.78); border-left:2px solid var(--cyan); display:flex; justify-content:space-between; align-items:center; gap:8px; }
+    .metric span { color:#bad8e8; font-size:12px; }
+    .metric b { color:var(--cyan); font:700 22px/1 Consolas,monospace; }
+    .quality { padding:12px; display:grid; grid-template-columns:repeat(3,1fr); gap:7px; }
+    .quality div { padding:11px 4px; background:var(--panel2); text-align:center; color:var(--muted); font-size:11px; }
+    .quality b { display:block; margin-bottom:5px; font:700 21px/1 Consolas,monospace; }
+    .quality .good b { color:var(--mint); } .quality .bad b { color:var(--red); } .quality .review b { color:var(--amber); }
+    .inventory-panel { flex:1; min-height:300px; }
+    .source-chip { color:#ffe6a8; border:1px solid rgba(255,200,87,.6); background:rgba(255,200,87,.1); padding:3px 7px; font-size:10px; }
+    .inventory-list { max-height:39vh; overflow:auto; padding:8px 10px 12px; }
+    .inventory-row { padding:8px 7px; display:grid; grid-template-columns:44px 1fr auto; gap:8px; align-items:center; border-bottom:1px solid rgba(75,159,199,.16); font-size:12px; }
+    .inventory-row .id { color:#5f91aa; font-family:Consolas,monospace; }
+    .inventory-row .qty { color:var(--cyan); font-family:Consolas,monospace; }
+    .inventory-row.unlimited .qty { color:var(--mint); }
+    .inventory-row.dropping { background:rgba(255,63,100,.1); border-left:2px solid var(--red); }
+    .camera-grid { flex:1; min-height:500px; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .camera-card { display:flex; flex-direction:column; }
+    .frame { position:relative; flex:1; min-height:350px; overflow:hidden; background:#00070c; }
+    .frame img { width:100%; height:100%; object-fit:contain; display:block; }
+    .label { position:absolute; top:10px; left:10px; padding:5px 9px; background:rgba(0,10,18,.8); border:1px solid var(--line); color:var(--cyan); font-size:12px; font-weight:700; }
+    .camera-meta { padding:9px 12px; border-top:1px solid var(--line); display:flex; justify-content:space-between; gap:10px; color:var(--muted); font-size:11px; }
+    .summary { display:grid; grid-template-columns:repeat(4,1fr); gap:9px; }
+    .summary div { padding:14px 8px; text-align:center; }
+    .summary b { display:block; color:var(--cyan); font:700 25px/1 Consolas,monospace; margin-bottom:5px; }
+    .alerts { flex:1; min-height:330px; }
+    .alert-list { padding:10px; display:flex; flex-direction:column; gap:9px; max-height:43vh; overflow:auto; }
+    .alert { padding:11px; background:rgba(255,43,80,.11); border-left:3px solid var(--red); color:#ffc1cb; }
+    .alert strong { display:block; color:white; font-size:13px; text-shadow:0 0 7px var(--red); }
+    .alert p { margin:6px 0 0; color:#dc8796; font-size:11px; line-height:1.45; }
+    .alert time { display:block; margin-top:6px; color:#8f6470; font-size:10px; }
+    .empty { padding:25px 10px; text-align:center; color:var(--muted); font-size:12px; }
+    .people { text-align:center; padding:16px; }
+    .people b { display:block; color:var(--amber); font:800 48px/1 Consolas,monospace; text-shadow:0 0 17px rgba(255,200,87,.3); }
+    .people small { color:var(--muted); }
+    .people-grid { margin-top:12px; display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+    .people-grid div { padding:8px; background:var(--panel2); color:var(--muted); font-size:10px; }
+    .people-grid strong { display:block; margin-top:3px; color:var(--text); font-size:17px; }
+    .error { display:none; padding:10px 12px; border:1px solid var(--red); background:rgba(255,63,100,.14); color:#ffd5dd; }
+    @media(max-width:1200px){ .layout{grid-template-columns:260px 1fr}.right{grid-column:1/-1;display:grid;grid-template-columns:1fr 280px}.inventory-list{max-height:320px} }
+    @media(max-width:820px){ .layout{grid-template-columns:1fr}.camera-grid,.right{grid-template-columns:1fr}.frame{min-height:280px}header{padding:0 14px}.status{display:none} }
+  </style>
+</head>
+<body>
+  <header>
+    <div><h1>AutoDine 智慧仓储视觉与库存预警</h1><div class="subtitle">MODULE A · DUAL VIDEO · INVENTORY ANOMALY</div></div>
+    <div class="status"><span class="pulse"></span><span id="system-status">等待系统启动</span></div>
+  </header>
+  <main class="layout">
+    <aside class="column">
+      <section class="panel">
+        <div class="panel-title">YOLO 六类水果累计 <small>轨迹去重</small></div>
+        <div class="fruit-list">
+          <div class="metric"><span>苹果</span><b data-count="apple">0</b></div><div class="metric"><span>香蕉</span><b data-count="banana">0</b></div>
+          <div class="metric"><span>葡萄</span><b data-count="grape">0</b></div><div class="metric"><span>橙子</span><b data-count="orange">0</b></div>
+          <div class="metric"><span>菠萝</span><b data-count="pineapple">0</b></div><div class="metric"><span>西瓜</span><b data-count="watermelon">0</b></div>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-title">六类水果整果品质 <small>分类结果</small></div>
+        <div class="quality"><div class="good"><b data-count="good">0</b>正常</div><div class="bad"><b data-count="defective">0</b>疑似缺陷</div><div class="review"><b data-count="review">0</b>待复核</div></div>
+      </section>
+      <section class="panel inventory-panel">
+        <div class="panel-title">原料库存 <span class="source-chip">演示数据 · Word v1.0</span></div>
+        <div class="inventory-list" id="inventory-list"><div class="empty">等待库存数据</div></div>
+      </section>
+    </aside>
+
+    <section class="column">
+      <div id="runtime-error" class="error"></div>
+      <div class="camera-grid">
+        <article class="panel camera-card"><div class="panel-title">水果检测视频 <small id="inventory-video-status">WAITING</small></div><div class="frame"><img id="inventory-video-frame" alt="水果检测视频"><div class="label">6-CLASS FRUIT + QUALITY</div></div><div class="camera-meta"><span id="inventory-video-fps">FPS 0.0</span><span id="inventory-video-summary">水果 0</span></div></article>
+        <article class="panel camera-card"><div class="panel-title">人员检测视频 <small id="security-video-status">WAITING</small></div><div class="frame"><img id="security-video-frame" alt="人员检测视频"><div class="label">PERSON DETECTION</div></div><div class="camera-meta"><span id="security-video-fps">FPS 0.0</span><span id="security-video-summary">人员 0</span></div></article>
+      </div>
+      <div class="summary"><div class="panel"><b id="fruit-total">0</b>六类水果累计</div><div class="panel"><b data-count="good">0</b>正常整果</div><div class="panel"><b data-count="defective">0</b>疑似缺陷</div><div class="panel"><b data-count="review">0</b>待人工复核</div></div>
+    </section>
+
+    <aside class="column right">
+      <section class="panel alerts"><div class="panel-title">安全与库存异常日志 <span class="source-chip">联调演示</span></div><div class="alert-list" id="alert-list"><div class="empty">暂无预警</div></div></section>
+      <section class="panel"><div class="panel-title">累计人员 <small>轨迹去重</small></div><div class="people"><b data-count="person">0</b><small>累计唯一人员轨迹</small><div class="people-grid"><div>当前视野<strong id="visible-person">0</strong></div><div>数据来源<strong>YOLO</strong></div></div></div></section>
+    </aside>
+  </main>
+  <script>
+    const fruitKeys=["apple","banana","grape","orange","pineapple","watermelon"];
+    const setCount=(key,value)=>document.querySelectorAll(`[data-count="${key}"]`).forEach(node=>node.textContent=value??0);
+    const fruitTotal=counts=>fruitKeys.reduce((sum,key)=>sum+(counts[key]||0),0);
+    const esc=value=>String(value).replace(/[&<>'"]/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"})[char]);
+
+    function renderInventory(items){
+      const list=document.getElementById("inventory-list"); list.replaceChildren();
+      items.forEach(item=>{ const row=document.createElement("div"); row.className=`inventory-row ${item.inventory_policy==="UNLIMITED"?"unlimited":""}`; if(item.ingredient_id==="I014"&&Number(item.physical_quantity)<2000)row.classList.add("dropping"); row.innerHTML=`<span class="id">${esc(item.ingredient_id)}</span><span>${esc(item.name)}</span><span class="qty">${item.inventory_policy==="UNLIMITED"?"不限量":`${esc(item.physical_quantity)} ${esc(item.base_unit)}`}</span>`; list.appendChild(row); });
+    }
+    function renderAlerts(alerts){
+      const list=document.getElementById("alert-list"); list.replaceChildren();
+      if(!alerts.length){list.innerHTML='<div class="empty">暂无预警</div>';return;}
+      alerts.forEach(alert=>{const node=document.createElement("div");node.className="alert";const detail=alert.category==="inventory_reduction"?`连续 ${alert.consecutive_drops} 次下降 · 当前 ${alert.current_quantity}${alert.unit}`:`当前视野 ${alert.visible_person_count} 人 · 权限结果为演示输入`;node.innerHTML=`<strong>${esc(alert.message)}</strong><p>${esc(detail)}</p><time>${new Date(alert.timestamp).toLocaleString()} · 未发布到 Core</time>`;list.appendChild(node);});
+    }
+    function renderState(state){
+      fruitKeys.concat(["good","defective","review"]).forEach(key=>setCount(key,state.vision_counts[key]||0));setCount("person",state.security_counts.person||0);document.getElementById("visible-person").textContent=state.security_counts.current_visible||0;document.getElementById("fruit-total").textContent=fruitTotal(state.vision_counts);
+      const playing=state.streams.filter(s=>s.status==="playing").length,ended=state.streams.filter(s=>s.status==="ended").length;document.getElementById("system-status").textContent=ended===2?"双路视频处理完成":`${playing}/2 路运行 · ${state.loop_enabled?"循环回放":"单次播放"}`;
+      state.streams.forEach(stream=>{const id=stream.stream_id;document.getElementById(`${id}-status`).textContent=stream.status.toUpperCase();document.getElementById(`${id}-fps`).textContent=`处理 ${stream.processing_fps.toFixed(1)} FPS · 源 ${stream.source_fps.toFixed(1)}`;document.getElementById(`${id}-summary`).textContent=stream.role==="inventory"?`六类水果累计 ${fruitTotal(stream.counts)} · ${stream.source_name}`:`累计人员 ${stream.counts.person||0} · 当前 ${stream.current_visible_count||0}`;});
+      renderInventory(state.inventory.items);renderAlerts(state.alerts);const error=document.getElementById("runtime-error");error.style.display=state.runtime_error?"block":"none";error.textContent=state.runtime_error?`运行失败：${state.runtime_error}`:"";
+    }
+    async function refresh(){const response=await fetch("/api/state",{cache:"no-store"});if(!response.ok)throw new Error(`state API ${response.status}`);renderState(await response.json());}
+    function refreshFrames(){const stamp=Date.now();document.getElementById("inventory-video-frame").src=`/api/videos/inventory-video/frame.jpg?t=${stamp}`;document.getElementById("security-video-frame").src=`/api/videos/security-video/frame.jpg?t=${stamp}`;}
+    refresh().catch(console.error);setInterval(()=>refresh().catch(console.error),700);setInterval(refreshFrames,350);
+  </script>
+</body>
+</html>
